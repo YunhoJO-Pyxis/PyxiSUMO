@@ -126,6 +126,35 @@ def main() -> int:
           (r.stdout + r.stderr).strip()[-160:])
     shutil.rmtree(d.parent, ignore_errors=True)
 
+    # ---------- 6) 패키지 폴더 안에 사본이 들어간 경우 -------------------
+    #  압축을 C:\pyxisumo 가 아니라 그 안의 pyxisumo 폴더에 풀면 생긴다.
+    #  실행에는 지장이 없어 눈치채기 어렵고, 그대로 올리면 저장소에 옛 파일이
+    #  수십 개 섞인다 (실제로 그렇게 올라갔다).
+    d = sandbox()
+    nested = d / "pyxisumo" / "pyxisumo"
+    nested.mkdir(parents=True, exist_ok=True)
+    (nested / "__init__.py").write_text("# 옛 사본\n", encoding="utf-8")
+    (d / "pyxisumo" / "README.md").write_text("옛 README\n", encoding="utf-8")
+    (d / "pyxisumo" / "1_설치하기.bat").write_text("rem old\r\n", encoding="utf-8")
+
+    r = publish_here(d)
+    check("사본이 있으면 멈춤", r.returncode != 0, "그대로 올라갔습니다")
+    check("  어느 폴더인지 알려줌",
+          "pyxisumo/pyxisumo" in (r.stdout + r.stderr).replace("\\", "/"))
+
+    #  --fix-nested 를 주면 지우지 않고 옮긴다
+    r2 = subprocess.run(
+        [sys.executable, "tools/publish.py", "--dry-run", "--fix-nested",
+         "--repo", "https://github.com/test/PyxiSumo"],
+        cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    check("--fix-nested 로 정리하면 통과", r2.returncode == 0,
+          (r2.stdout + r2.stderr).strip()[-160:])
+    moved = d / "_중복파일_확인후삭제"
+    check("  지우지 않고 옮겨 둠", moved.is_dir() and any(moved.iterdir()))
+    check("  진짜 패키지는 남아 있음", (d / "pyxisumo" / "ranks.py").exists(),
+          "실제 모듈까지 옮겨버렸습니다")
+    shutil.rmtree(d.parent, ignore_errors=True)
+
     print()
     if FAIL:
         print(f"실패 {len(FAIL)}건: {', '.join(FAIL)}")

@@ -182,6 +182,47 @@ def audit(paths: list[str]) -> None:
         )
 
 
+# 패키지 폴더(pyxisumo/) 안에 있으면 안 되는 것들.
+# 압축을 C:\pyxisumo 가 아니라 C:\pyxisumo\pyxisumo 에 풀면 프로젝트 한 벌이
+# 통째로 그 안에 들어간다. 실행에는 지장이 없어서 눈치채기 어렵고, 그대로
+# 올리면 저장소에 옛 파일이 60개쯤 섞여 무엇이 진짜인지 알 수 없게 된다.
+NESTED_MARKS = ("pyxisumo/pyxisumo", "pyxisumo/tests", "pyxisumo/tools",
+                "pyxisumo/db", "pyxisumo/.github", "pyxisumo/docs")
+
+
+def find_nested() -> list[Path]:
+    """패키지 폴더 안에 잘못 들어간 프로젝트 사본을 찾는다."""
+    found: list[Path] = []
+    pkg = ROOT / "pyxisumo"
+    if not pkg.is_dir():
+        return found
+    for mark in NESTED_MARKS:
+        d = ROOT / mark
+        if d.is_dir():
+            found.append(d)
+    for f in pkg.iterdir():
+        if f.is_file() and (f.suffix == ".bat" or
+                            f.name in ("README.md", "requirements.txt",
+                                       ".gitignore", ".env.example")):
+            found.append(f)
+    return found
+
+
+def move_nested_aside(items: list[Path]) -> Path:
+    """지우지 않고 한곳으로 옮긴다 — 되돌릴 수 있게."""
+    bin_dir = ROOT / "_중복파일_확인후삭제"
+    bin_dir.mkdir(exist_ok=True)
+    import shutil
+    for it in items:
+        dest = bin_dir / it.name
+        n = 1
+        while dest.exists():
+            dest = bin_dir / f"{it.name}_{n}"
+            n += 1
+        shutil.move(str(it), str(dest))
+    return bin_dir
+
+
 def normalize_repo(url: str) -> str:
     u = url.strip().rstrip("/")
     if u.endswith(".git"):
@@ -192,7 +233,8 @@ def normalize_repo(url: str) -> str:
     return u
 
 
-def publish(repo: str, *, message: str, dry_run: bool = False) -> int:
+def publish(repo: str, *, message: str, dry_run: bool = False,
+            fix_nested: bool = False) -> int:
     if not have_git():
         raise Stop(
             "git 이 설치되어 있지 않습니다.\n"
@@ -215,6 +257,24 @@ def publish(repo: str, *, message: str, dry_run: bool = False) -> int:
             run(["git", "remote", "set-url", "origin", repo + ".git"])
     else:
         run(["git", "remote", "add", "origin", repo + ".git"])
+
+    # 잘못 들어간 사본 정리 (있으면)
+    nested = find_nested()
+    if nested:
+        print("\n  ! 패키지 폴더 안에 프로젝트 사본이 들어가 있습니다.")
+        print("    (압축을 C:\\pyxisumo 가 아니라 그 안의 pyxisumo 폴더에 푼 것 같습니다)")
+        for it in nested:
+            print(f"      · {it.relative_to(ROOT)}")
+        if fix_nested:
+            bin_dir = move_nested_aside(nested)
+            print(f"    → '{bin_dir.name}' 폴더로 옮겼습니다. "
+                  "확인하시고 통째로 지우시면 됩니다.")
+        else:
+            raise Stop(
+                "올리지 않았습니다 — 위 항목이 저장소에 옛 파일을 섞어 넣습니다.\n"
+                "  --fix-nested 를 주면 지우지 않고 '_중복파일_확인후삭제' 폴더로 "
+                "옮겨 드립니다."
+            )
 
     run(["git", "add", "-A"], quiet=True)
 
@@ -258,9 +318,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--message", default="PyxiSumo 갱신")
     ap.add_argument("--dry-run", action="store_true",
                     help="검사만 하고 올리지는 않는다")
+    ap.add_argument("--fix-nested", action="store_true",
+                    help="잘못 들어간 사본을 '_중복파일_확인후삭제' 로 옮긴다")
     args = ap.parse_args(argv)
     try:
-        return publish(args.repo, message=args.message, dry_run=args.dry_run)
+        return publish(args.repo, message=args.message, dry_run=args.dry_run,
+                       fix_nested=args.fix_nested)
     except Stop as e:
         print(f"\n{e}", file=sys.stderr)
         return 1

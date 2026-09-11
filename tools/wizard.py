@@ -459,7 +459,7 @@ def cmd_publish() -> int:
     say("올리기 전에 비밀번호가 새 나갈 파일이 없는지 먼저 확인합니다.")
     say()
 
-    code = run(["tools/publish.py", "--repo", repo], env={})
+    code = run(["tools/publish.py", "--repo", repo, "--fix-nested"], env={})
     if code != 0:
         return code
 
