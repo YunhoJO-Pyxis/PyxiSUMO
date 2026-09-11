@@ -1,0 +1,71 @@
+name: 장중 성적 갱신
+
+# 본바쇼 중에만 의미가 있다. GitHub cron 은 "홀수월의 15일간"을 표현할 수 없으므로
+# 스케줄은 넉넉히 걸고, guard 스텝이 DB의 basho 테이블을 보고 개최 중이 아니면
+# 조용히 끝낸다. (설계서 六장: 상시 서버 대신 배치)
+on:
+  schedule:
+    # JST 13:10 ~ 19:10 = UTC 04:10 ~ 10:10, 20분 간격
+    - cron: "10,30,50 4-10 * * *"
+  workflow_dispatch:
+    inputs:
+      basho:
+        description: "바쇼 ID (YYYYMM). 비우면 오늘 날짜로 판정"
+        required: false
+
+concurrency:
+  group: ingest-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: 개최 중인 바쇼가 있는지 확인
+        id: guard
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, psycopg
+          override = os.environ.get("INPUT_BASHO") or ""
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c, c.cursor() as cur:
+              if override.strip():
+                  cur.execute(
+                      "SELECT id, (CURRENT_DATE - start_date) + 1 FROM basho WHERE id = %s",
+                      (override.strip(),))
+              else:
+                  cur.execute("""
+                      SELECT id, (CURRENT_DATE - start_date) + 1
+                      FROM basho
+                      WHERE CURRENT_DATE BETWEEN start_date AND end_date
+                      LIMIT 1
+                  """)
+              row = cur.fetchone()
+          if row:
+              day = max(1, min(15, int(row[1])))
+              print(f"basho={row[0]}")
+              print(f"day={day}")
+              print("active=true")
+          else:
+              print("active=false")
+          PY
+        env:
+          INPUT_BASHO: ${{ github.event.inputs.basho }}
+
+      - name: 반즈케 성적 + 당일 취조 갱신
+        if: steps.guard.outputs.active == 'true'
+        run: |
+          python -m pyxisumo.ingest live \
+            --basho "${{ steps.guard.outputs.basho }}" \
+            --days "${{ steps.guard.outputs.day }}"
+
+      - name: 개최 중이 아님
+        if: steps.guard.outputs.active != 'true'
+        run: echo "본바쇼 기간이 아니므로 건너뜁니다."

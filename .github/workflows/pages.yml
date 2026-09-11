@@ -1,0 +1,57 @@
+name: 웹페이지 공개
+
+# DB를 읽어 정적 사이트를 만들고 GitHub Pages 로 올린다.
+# 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 바꿔두어야 한다.
+on:
+  schedule:
+    - cron: "30 21 * * *"   # UTC 21:30 = JST 익일 06:30
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["장중 성적 갱신", "반즈케 예측 / 적중률"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: 한국어·일본어 표기 채우기
+        # 이 단계를 빼면 공개된 사이트에 'Nishonoseki' 같은 영문이 그대로 나간다.
+        # (이미 값이 있는 행은 건드리지 않으므로 매번 돌려도 안전하다)
+        run: python -m pyxisumo.setup names
+
+      - name: 사이트 생성
+        run: python -m pyxisumo.site.build --out docs
+
+      - name: 생성 결과 점검
+        run: python tests/check_site.py --dir docs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

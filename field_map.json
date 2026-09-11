@@ -1,0 +1,23 @@
+{
+  "absences": "absences",
+  "birth_date": "birthDate",
+  "day": "day",
+  "debut": "debut",
+  "east_id": "eastId",
+  "end_date": "endDate",
+  "height": "height",
+  "heya": "heya",
+  "kimarite": "kimarite",
+  "losses": "losses",
+  "match_no": "matchNo",
+  "rank": "rank",
+  "rikishi_id": "id",
+  "shikona_en": "shikonaEn",
+  "shikona_ja": "shikonaJp",
+  "shusshin": "shusshin",
+  "start_date": "startDate",
+  "weight": "weight",
+  "west_id": "westId",
+  "winner_id": "winnerId",
+  "wins": "wins"
+}

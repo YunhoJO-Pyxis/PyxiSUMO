@@ -1,0 +1,52 @@
+name: 일일 마스터 갱신
+
+on:
+  schedule:
+    - cron: "0 20 * * *"   # UTC 20:00 = JST 익일 05:00
+  workflow_dispatch:
+
+concurrency:
+  group: ingest-daily
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SHEET_ID: ${{ secrets.SHEET_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: 리키시 마스터 + 키마리테
+        run: |
+          python -m pyxisumo.ingest kimarite
+          python -m pyxisumo.ingest rikishi
+
+      - name: 한국어 표기 시트 동기화
+        if: env.SHEET_ID != ''
+        run: python -m pyxisumo.sync_sheets --sheet-id "$SHEET_ID"
+
+      - name: 새로 들어온 이름의 한국어 표기 채우기
+        run: python -m pyxisumo.setup names
+
+      - name: 최신 바쇼 반즈케 재확인
+        run: |
+          python - <<'PY'
+          import os, subprocess, psycopg
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c, c.cursor() as cur:
+              cur.execute("""
+                  SELECT id FROM basho
+                  WHERE banzuke_released_on IS NOT NULL
+                    AND banzuke_released_on <= CURRENT_DATE
+                  ORDER BY id DESC LIMIT 1
+              """)
+              row = cur.fetchone()
+          if row:
+              subprocess.run(
+                  ["python", "-m", "pyxisumo.ingest", "basho", "--basho", row[0]],
+                  check=True)
+          PY
