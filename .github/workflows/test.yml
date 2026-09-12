@@ -95,5 +95,11 @@ jobs:
       - name: 외부 프로그램 출력 인코딩 (Windows 한국어판 대비)
         run: python tests/check_encoding.py
 
+      - name: 실패 안내가 원인을 알려주는지
+        run: DATABASE_URL="$TEST_DSN" python tests/check_preflight.py
+
+      - name: 공개 워크플로 사전점검 (실제 통과 확인)
+        run: DATABASE_URL="$TEST_DSN" python tools/preflight.py
+
       - name: setup doctor
         run: DATABASE_URL="$TEST_DSN" python -m pyxisumo.setup doctor || true
