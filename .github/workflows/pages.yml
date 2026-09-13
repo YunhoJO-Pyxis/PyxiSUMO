@@ -60,12 +60,12 @@ jobs:
             exit 1
           }
 
+      # 점검에서 걸려도 **공개는 막지 않는다.**
+      # 이름 하나가 영문으로 남았다고 사이트 전체를 못 보는 편이 더 나쁘다.
+      # 대신 걸린 항목을 Annotations 상자에 그대로 적어 보이게 한다.
+      # (엄격한 품질 관문은 tests 워크플로가 데모 데이터로 맡는다)
       - name: 생성 결과 점검
-        run: |
-          python tests/check_site.py --dir docs || {
-            echo "::error title=만들어진 페이지에 문제가 있습니다::링크·표기 점검에서 걸렸습니다. 이 화면을 알려 주세요."
-            exit 1
-          }
+        run: python tests/check_site.py --dir docs --github --warn-only
 
       - uses: actions/upload-pages-artifact@v3
         with:

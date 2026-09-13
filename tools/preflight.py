@@ -23,6 +23,50 @@ def annotate(title: str, body: str) -> str:
     return f"::error title={title}::{one_line}"
 
 
+def masked(dsn: str) -> str:
+    """비밀번호를 가린 접속 주소.
+
+    안내문은 **공개 저장소의 화면에 그대로 남는다.** 그러므로 주소를 보여줄 때
+    사용자 이름·비밀번호 부분은 반드시 지운다. 주소의 '모양'만 보이면 된다.
+    """
+    try:
+        head, rest = dsn.split("://", 1)
+    except ValueError:
+        return "(주소 모양 아님)"
+    if "@" in rest:
+        rest = "****:****@" + rest.rsplit("@", 1)[1]
+    return f"{head}://{rest}"
+
+
+def check_query(dsn: str) -> str | None:
+    """주소 끝의 ?옵션 부분이 성한가.
+
+    복사할 때 일부를 두 번 붙여 넣으면 '?sslmode=require?sslmode=require' 처럼
+    되고, psycopg 는 "extra key/value separator" 라는 알아볼 수 없는 말로 죽는다.
+    그 상태를 여기서 알아보게 말해 준다.
+    """
+    if "?" not in dsn:
+        return None
+    query = dsn.split("?", 1)[1]
+
+    if "?" in query:
+        return annotate(
+            "주소가 두 번 겹쳐 붙여 넣어진 것 같습니다",
+            f"물음표(?)가 두 개 이상 있습니다. 지금 값의 모양: {masked(dsn)} — "
+            "시크릿을 지우고 .env 의 한 줄을 다시, 한 번만 붙여 넣어 주세요.")
+
+    for part in query.split("&"):
+        if not part:
+            continue
+        if part.count("=") > 1:
+            return annotate(
+                "주소 끝의 옵션이 깨져 있습니다",
+                f"'{part}' 에 등호(=)가 두 번 들어 있습니다. "
+                f"지금 값의 모양: {masked(dsn)} — 시크릿을 지우고 "
+                ".env 의 한 줄을 다시 붙여 넣어 주세요.")
+    return None
+
+
 def check_dsn(dsn: str | None) -> str | None:
     """접속 주소 자체의 문제를 본다. 문제가 없으면 None."""
     dsn = (dsn or "").strip()
@@ -33,6 +77,18 @@ def check_dsn(dsn: str | None) -> str | None:
             "저장소 Settings → Secrets and variables → Actions 에서 "
             "New repository secret 을 눌러 Name=DATABASE_URL 로 추가해 주세요. "
             "값은 PC의 .env 파일 안에 있습니다.")
+
+    # 여러 줄이 들어간 경우 — .env 에서 두 줄 이상을 긁어 붙인 것이다.
+    # (실제로 'SHEET_ID=' 줄까지 같이 들어갔다. 그러면 psycopg 는
+    #  "extra key/value separator" 라는 엉뚱한 말로 죽는다.)
+    if "\n" in dsn or "\r" in dsn:
+        first = dsn.splitlines()[0].strip()
+        extra = [l.strip() for l in dsn.splitlines()[1:] if l.strip()]
+        return annotate(
+            "시크릿에 여러 줄이 들어갔습니다",
+            f"접속 주소는 한 줄입니다. 지금은 {len(dsn.splitlines())}줄이고 "
+            f"두 번째 줄부터 '{extra[0][:20] if extra else ''}...' 이 붙어 있습니다. "
+            f"첫 줄({masked(first)})만 남기고 다시 넣어 주세요.")
 
     # 가장 흔한 실수 — .env 한 줄을 통째로 붙여 넣은 경우
     if dsn.upper().startswith("DATABASE_URL"):
@@ -54,7 +110,7 @@ def check_dsn(dsn: str | None) -> str | None:
             "시크릿 값이 접속 주소 모양이 아닙니다",
             f"postgresql:// 로 시작해야 합니다. 지금은 '{dsn[:12]}...' 로 시작합니다.")
 
-    return None
+    return check_query(dsn)
 
 
 def check_connection(dsn: str) -> str | None:
@@ -70,7 +126,8 @@ def check_connection(dsn: str) -> str | None:
     except Exception as e:                             # noqa: BLE001
         return annotate(
             "데이터베이스에 접속하지 못했습니다",
-            f"{type(e).__name__}: {e} — 시크릿의 주소가 PC의 .env 와 같은지, "
+            f"{type(e).__name__}: {e} — 지금 값의 모양: {masked(dsn)} · "
+            "시크릿의 주소가 PC의 .env 와 같은지, "
             "Supabase 프로젝트가 일시중지(pause) 되지 않았는지 확인해 주세요.")
     return None
 

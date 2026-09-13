@@ -46,6 +46,7 @@ pyxisumo/sync_sheets.py    스프레드시트 → 한국어 표기 동기화
 | `8_예측조정하기.bat` | 과거 대회로 계수를 맞춰 예측 정확도를 올림 |
 | `9_이름다시채우기.bat` | 한국어·일본어 표기만 다시 채움 (헤야 한자를 추가한 뒤) |
 | `A_깃허브에올리기.bat` | GitHub 저장소에 올림. 올리기 전에 **비밀번호가 새는지 먼저 검사** |
+| `B_시크릿값복사하기.bat` | GitHub 에 넣을 접속 주소를 **클립보드에 담아** 줌 (손으로 복사하지 않게) |
 
 ### 새 버전을 받았을 때
 
@@ -295,8 +296,9 @@ python tests/check_site.py --dir docs
 1. GitHub 에서 새 저장소(New repository)를 만듭니다.
 2. **`A_깃허브에올리기.bat`** 을 실행합니다. 저장소 주소를 한 번만 물어보고
    그 뒤로는 기억합니다. 처음이면 브라우저가 열리며 GitHub 로그인을 묻습니다.
-3. 저장소 **Settings → Secrets and variables → Actions** 에서
-   `DATABASE_URL` 을 새 시크릿으로 추가합니다 (값은 `.env` 안에 있습니다).
+3. **`B_시크릿값복사하기.bat`** 을 실행합니다. 접속 주소를 클립보드에 담고
+   넣을 화면을 열어 줍니다 — `Name` 에 `DATABASE_URL`, `Secret` 에 Ctrl+V.
+   (손으로 드래그해 복사하면 끝부분이 겹쳐 들어가는 사고가 납니다)
 4. **Settings → Pages** 에서 Source 를 **GitHub Actions** 로 바꿉니다.
 5. **Actions → 웹페이지 공개 → Run workflow** 를 누릅니다.
 

@@ -223,6 +223,37 @@ def move_nested_aside(items: list[Path]) -> Path:
     return bin_dir
 
 
+def adopt_remote_history() -> bool:
+    """원격에 이미 올라간 내용이 있으면 그 위에 얹는다.
+
+    PC의 .git 폴더가 없어져 새로 만들어지면(압축을 다시 풀거나 폴더를 옮기면
+    생긴다) 기록이 텅 빈 상태가 된다. 그런데 GitHub 에는 이미 커밋이 있으므로
+    git 은 "원격에 내가 모르는 내용이 있다"며 거절한다:
+
+        ! [rejected]  main -> main (fetch first)
+
+    이때 강제로 덮어쓰면(force) 원격 기록이 날아간다. 대신 원격 기록을
+    이어받고(reset --soft) 지금 폴더의 내용을 그 위에 한 커밋으로 얹는다.
+    --soft 라서 **작업 폴더의 파일은 하나도 건드리지 않는다.**
+
+    얹었으면 True.
+    """
+    f = run(["git", "fetch", "origin", "main"], check=False, quiet=True)
+    if f.returncode != 0:
+        return False              # 원격이 비어 있음 — 그냥 올리면 된다
+
+    have = run(["git", "rev-parse", "--verify", "HEAD"], check=False, quiet=True)
+    if have.returncode == 0:
+        # 원격 커밋이 이미 내 기록 안에 있으면 할 일이 없다
+        anc = run(["git", "merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD"],
+                  check=False, quiet=True)
+        if anc.returncode == 0:
+            return False
+
+    run(["git", "reset", "--soft", "FETCH_HEAD"], check=False, quiet=True)
+    return True
+
+
 def normalize_repo(url: str) -> str:
     u = url.strip().rstrip("/")
     if u.endswith(".git"):
@@ -278,6 +309,11 @@ def publish(repo: str, *, message: str, dry_run: bool = False,
 
     run(["git", "add", "-A"], quiet=True)
 
+    # 원격에 이미 내용이 있으면 이어받는다 (덮어쓰지 않는다).
+    # 검사만 하는 --dry-run 에서는 네트워크를 건드리지 않는다.
+    if not dry_run and adopt_remote_history():
+        print("  · GitHub 에 이미 올라간 내용을 이어받았습니다")
+
     paths = files_to_upload()
     if not paths:
         raise Stop("올릴 파일이 없습니다.")
@@ -304,11 +340,23 @@ def publish(repo: str, *, message: str, dry_run: bool = False,
     #  push 는 진행 상황을 그대로 보여줘야 하므로 출력을 잡지 않는다
     r = subprocess.run(["git", "push", "-u", "origin", "main"], cwd=ROOT)
     if r.returncode != 0:
+        # 무슨 일인지 다시 확인해 정확한 안내를 낸다.
+        # (예전에는 원인과 상관없이 "로그인이 취소됐을 수 있습니다" 라고만 했다)
+        again = run(["git", "push", "origin", "main"], check=False, quiet=True)
+        detail = ((again.stderr or "") + (again.stdout or "")).strip()
+        if "rejected" in detail or "fetch first" in detail:
+            raise Stop(
+                "올리지 못했습니다 — GitHub 에 제가 모르는 내용이 있습니다.\n"
+                "  이어받기를 시도했는데도 맞지 않았습니다.\n"
+                "  이 화면을 그대로 알려 주시면 고쳐 드리겠습니다.\n\n"
+                + detail[:400])
+        if "Authentication" in detail or "could not read Username" in detail:
+            raise Stop(
+                "올리지 못했습니다 — GitHub 로그인이 되지 않았습니다.\n"
+                "  로그인 창이 떴다가 닫혔을 수 있습니다. 다시 실행해 보세요.")
         raise Stop(
             "올리지 못했습니다.\n"
-            "  · 로그인 창이 떴다가 취소되었을 수 있습니다 — 다시 실행해 보세요.\n"
-            "  · 저장소 주소가 맞는지 확인해 주세요: " + repo
-        )
+            f"  저장소: {repo}\n\n" + (detail[:400] or "(자세한 내용 없음)"))
     return 0
 
 

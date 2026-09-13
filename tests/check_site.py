@@ -151,6 +151,14 @@ def check_file(path: Path, root: Path) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="생성된 사이트 점검")
     ap.add_argument("--dir", default="docs")
+    # 공개 워크플로에서 쓰는 두 가지.
+    #  --github   : 걸린 항목을 GitHub Annotations 상자에 그대로 적는다.
+    #               (실행 로그는 로그인해야 보이므로, 안 적으면 원인을 알 수 없다)
+    #  --warn-only: 걸려도 실패로 만들지 않는다. 사람이 보는 사이트를 통째로
+    #               못 올리게 하는 것보다, 올리고 문제를 알려주는 편이 낫다.
+    #               품질을 지키는 쪽은 tests 워크플로(데모 데이터)가 맡는다.
+    ap.add_argument("--github", action="store_true")
+    ap.add_argument("--warn-only", action="store_true")
     args = ap.parse_args(argv)
 
     root = Path(args.dir).resolve()
@@ -218,6 +226,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ✗ {p}")
         if len(problems) > 40:
             print(f"  … 외 {len(problems) - 40}건")
+
+        if args.github:
+            level = "warning" if args.warn_only else "error"
+            # 한 줄로 눌러 적는다 — 줄바꿈이 있으면 상자에서 잘린다.
+            for p in problems[:10]:
+                one = " ".join(str(p).split())
+                print(f"::{level} title=페이지 점검::{one}")
+            if len(problems) > 10:
+                print(f"::{level} title=페이지 점검::외 {len(problems) - 10}건 "
+                      "더 있습니다.")
+
+        if args.warn_only:
+            print("(--warn-only: 문제를 알리기만 하고 계속 진행합니다)")
+            return 0
         return 1
 
     print(f"OK — HTML {len(files)}개 · 전체 {total_kb:,.0f}KB · "

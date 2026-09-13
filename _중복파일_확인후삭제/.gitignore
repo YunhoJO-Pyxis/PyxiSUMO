@@ -1,6 +1,0 @@
-__pycache__/
-*.pyc
-.env
-schema_probe.json
-.venv/
-docs/

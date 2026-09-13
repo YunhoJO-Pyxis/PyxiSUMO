@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -39,7 +40,15 @@ CASES = [
     ("DATABASE_URL= 까지 붙여 넣음", f"DATABASE_URL={REAL}", "DATABASE_URL="),
     ("소문자로 붙여 넣음", f"database_url={REAL}", "DATABASE_URL="),
     ("엉뚱한 값", "여기에 붙여넣기", "접속 주소 모양이 아닙니다"),
+    # 실제로 사용자에게 일어난 사고 — psycopg 는 "extra key/value separator"
+    # 라는 알아볼 수 없는 말로 죽는다. 사람 말로 바꿔 준다.
+    ("옵션을 두 번 붙여 넣음", f"{REAL}?sslmode=require?sslmode=require",
+     "두 번 겹쳐"),
+    ("등호가 두 개", f"{REAL}?sslmode==require", "등호(=)가 두 번"),
     ("따옴표째 붙여 넣음", f'"{REAL}"', "따옴표"),
+    # 실제 사고 — .env 에서 두 줄을 긁어 붙였다 (SHEET_ID= 줄까지)
+    ("두 줄이 들어감", f"{REAL}?sslmode=require\nSHEET_ID=", "여러 줄"),
+    ("줄바꿈이 CRLF", f"{REAL}?sslmode=require\r\nSHEET_ID=", "여러 줄"),
 ]
 
 
@@ -54,6 +63,15 @@ def main() -> int:
     # 정상 값은 통과해야 한다 — 멀쩡한 설정에 경고가 뜨면 아무도 안 믿는다
     check("정상 값은 통과", check_dsn(REAL) is None, str(check_dsn(REAL))[:110])
     check("앞뒤 공백은 봐준다", check_dsn(f"  {REAL}  ") is None)
+
+    # 안내문에 비밀번호가 섞이면 안 된다 — 공개 저장소 화면에 그대로 남는다
+    from tools.preflight import masked
+    leaky = [m for _, v, _ in CASES
+             if isinstance(v, str) and (m := check_dsn(v)) and "pw12345" in m]
+    check("안내문에 비밀번호가 없음", not leaky, "비밀번호가 화면에 찍힙니다")
+    check("주소를 보여줄 때 가림",
+          "****:****@" in masked(REAL) and "pw12345" not in masked(REAL),
+          masked(REAL))
 
     # 안내문이 한 줄인가 — 여러 줄이면 Annotations 상자에서 잘린다
     multi = [m for _, v, _ in CASES if (m := check_dsn(v)) and "\n" in m]
@@ -78,6 +96,39 @@ def main() -> int:
               bool(msg) and "접속하지 못했습니다" in msg, str(msg)[:110])
     else:
         print("  · psycopg 나 DATABASE_URL 이 없어 접속 검사는 건너뜁니다")
+
+    # --- 시크릿 값 꺼내기 -----------------------------------------------
+    #  손으로 드래그해 복사하다 값이 겹쳐 들어간 사고가 있었다.
+    #  tools/secret.py 가 .env 에서 정확히 꺼내는지 본다.
+    import tempfile, shutil, subprocess
+    tmp = Path(tempfile.mkdtemp(prefix="secret-"))
+    try:
+        shutil.copytree(Path(__file__).resolve().parent.parent / "tools",
+                        tmp / "tools")
+        (tmp / ".env").write_text(
+            "# 설정\n"
+            f"DATABASE_URL={REAL}?sslmode=require\n"
+            "SHEET_ID=\n", encoding="utf-8")
+        r = subprocess.run([sys.executable, "tools/secret.py"], cwd=tmp,
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        out = r.stdout + r.stderr
+        check("정상 .env 에서 값을 꺼냄", r.returncode in (0, 2), out[-120:])
+        check("  화면에 비밀번호를 찍지 않음", "pw12345" not in out, out[-120:])
+
+        (tmp / ".env").write_text(
+            f"DATABASE_URL={REAL}?sslmode=require?sslmode=require\n",
+            encoding="utf-8")
+        r = subprocess.run([sys.executable, "tools/secret.py"], cwd=tmp,
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        out = r.stdout + r.stderr
+        check("깨진 .env 는 멈추고 이유를 말함",
+              r.returncode == 1 and "겹쳐" in out, out[-120:])
+        check("  ::error:: 찌꺼기가 안 보임", "error title=" not in out,
+              out[-120:])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
     print()
     if FAIL:

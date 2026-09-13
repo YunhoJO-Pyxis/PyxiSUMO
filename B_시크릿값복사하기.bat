@@ -10,5 +10,5 @@ if not exist ".venv\Scripts\python.exe" (
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" tools\wizard.py resume
+".venv\Scripts\python.exe" tools\wizard.py secret
 exit /b %errorlevel%

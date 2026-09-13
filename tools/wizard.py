@@ -431,6 +431,50 @@ def cmd_tune() -> int:
     return code
 
 
+def cmd_secret() -> int:
+    """GitHub 시크릿에 넣을 값을 클립보드에 담고, 넣는 곳을 열어 준다."""
+    title("GitHub 시크릿 값 복사하기")
+    env = read_env()
+    repo = env.get("GITHUB_REPO", "")
+
+    say("웹페이지를 GitHub 이 만들려면 데이터베이스 접속 주소를 알려줘야 합니다.")
+    say("그 값을 지금 클립보드에 담아 드립니다 — 손으로 복사하지 마세요.")
+    say("(드래그로 복사하다 끝부분이 겹쳐 들어가는 일이 있습니다)")
+    say()
+
+    code = run(["tools/secret.py"], env={})
+    if code == 1:                 # 값 자체가 잘못됨 — 더 진행할 수 없다
+        return code
+    clipped = code == 0           # 2 = 값은 멀쩡한데 클립보드만 실패
+
+    say()
+    if repo:
+        url = repo.rstrip("/") + "/settings/secrets/actions/new"
+        say("이제 아래 화면에서 붙여넣기만 하시면 됩니다.")
+        say(f"  {url}")
+        say()
+        say("  Name   칸 : DATABASE_URL   (직접 입력)")
+        if clipped:
+            say("  Secret 칸 : Ctrl+V         (방금 담은 값)")
+        else:
+            say("  Secret 칸 : .env 에서 복사한 값")
+        say()
+        say("  그리고 [Add secret] 버튼")
+        say()
+        say("이미 같은 이름이 있으면 먼저 휴지통 아이콘으로 지우고 새로 만드세요.")
+        say()
+        say("브라우저를 지금 열어 드립니다.")
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+        except Exception:                              # noqa: BLE001
+            say("(자동으로 열지 못했습니다. 위 주소를 직접 열어 주세요)")
+    else:
+        say("저장소 주소를 아직 모릅니다. 'A_깃허브에올리기.bat' 을 먼저 실행해 주세요.")
+    return 0
+
+
 def cmd_publish() -> int:
     """GitHub 에 올리기. 저장소 주소는 한 번만 물어보고 .env 에 기억한다."""
     title("GitHub 에 올리기")
@@ -649,6 +693,8 @@ def main() -> int:
             code = cmd_tune()
         elif cmd == "update":
             code = cmd_update()
+        elif cmd == "secret":
+            code = cmd_secret()
         elif cmd == "publish":
             code = cmd_publish()
         elif cmd == "names":
