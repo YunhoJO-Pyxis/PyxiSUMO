@@ -33,6 +33,10 @@ EXPECTED_COLS = {
     "HEYA_LIST": 10,
     "HEYA_MEMBERS": 9,
     "SITE_STATS": 6,
+    # 한 번에 다 받아오는 판 (선수마다 묻지 않기 위한 것)
+    "RIKISHI_HISTORY_ALL": 12,
+    "RIKISHI_OPPONENTS_ALL": 6,
+    "HEYA_MEMBERS_ALL": 10,
 }
 
 FAIL: list[str] = []
@@ -74,6 +78,9 @@ def params_for(rn: Runner) -> dict[str, object]:
         "HEYA_LIST": None,
         "HEYA_MEMBERS": (slug,),
         "SITE_STATS": None,
+        "RIKISHI_HISTORY_ALL": None,
+        "RIKISHI_OPPONENTS_ALL": None,
+        "HEYA_MEMBERS_ALL": None,
     }
 
 
@@ -89,6 +96,9 @@ ALL = {
     "HEYA_LIST": Q.HEYA_LIST,
     "HEYA_MEMBERS": Q.HEYA_MEMBERS,
     "SITE_STATS": Q.SITE_STATS,
+    "RIKISHI_HISTORY_ALL": Q.RIKISHI_HISTORY_ALL,
+    "RIKISHI_OPPONENTS_ALL": Q.RIKISHI_OPPONENTS_ALL,
+    "HEYA_MEMBERS_ALL": Q.HEYA_MEMBERS_ALL,
 }
 
 

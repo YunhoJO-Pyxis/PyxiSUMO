@@ -98,8 +98,11 @@ jobs:
       - name: 실패 안내와 시크릿 값 꺼내기
         run: DATABASE_URL="$TEST_DSN" python tests/check_preflight.py
 
-      - name: 공개 워크플로 사전점검 (실제 통과 확인)
-        run: DATABASE_URL="$TEST_DSN" python tools/preflight.py
+      #  tools/preflight.py 를 여기서 직접 돌리지 않는다.
+      #  이 워크플로는 **드라이버 없이(psycopg 없이) 도는 것이 성질**이라
+      #  psql 로만 검증한다. preflight 는 psycopg 를 요구하므로 여기서는
+      #  "psycopg 가 없습니다" 로 실패한다 — 제품 문제가 아니라 배치 실수였다.
+      #  로직 자체는 위의 check_preflight.py 가 드라이버 없이 전부 검증한다.
 
       - name: setup doctor
         run: DATABASE_URL="$TEST_DSN" python -m pyxisumo.setup doctor || true

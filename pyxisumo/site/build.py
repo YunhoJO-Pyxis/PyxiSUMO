@@ -570,6 +570,16 @@ def build_rikishi(rn: Runner, out: Path, gen: str) -> int:
     d.mkdir(parents=True, exist_ok=True)
     people = rn.query(Q.PROFILE_RIKISHI)
 
+    # 선수마다 따로 묻지 않는다 — 한 번에 받아 파이썬에서 묶는다.
+    # (원격 DB에서는 왕복 한 번이 0.1초쯤이라, 1,500명이면 그것만 5분이다)
+    hist_by: dict[Any, list] = {}
+    for r in rn.query(Q.RIKISHI_HISTORY_ALL):
+        hist_by.setdefault(str(r[0]), []).append(r[1:12])
+
+    opp_by: dict[Any, list] = {}
+    for r in rn.query(Q.RIKISHI_OPPONENTS_ALL):
+        opp_by.setdefault(str(r[0]), []).append(r[1:6])
+
     index: list[dict[str, Any]] = []
     for p in people:
         (rid, name, name_ja, name_en, name_kana, heya, heya_ja, heya_slug,
@@ -577,8 +587,8 @@ def build_rikishi(rn: Runner, out: Path, gen: str) -> int:
          n_basho, best_rv, best_label, best_kind, best_num, best_side, best_div,
          tw, tl, ta, last_basho) = p[:25]
 
-        hist = rn.query(Q.RIKISHI_HISTORY, (rid,))
-        opps = rn.query(Q.RIKISHI_OPPONENTS, {"me": rid})
+        hist = hist_by.get(str(rid), [])
+        opps = opp_by.get(str(rid), [])[:20]   # 상대 전적은 많이 붙은 순 20명
 
         hrows = "".join(
             f'<tr><td class="num"><a href="../banzuke/{e(h0)}.html">'
@@ -684,6 +694,11 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
     d.mkdir(parents=True, exist_ok=True)
     rows = rn.query(Q.HEYA_LIST)
 
+    # 헤야마다 따로 묻지 않는다 (위와 같은 이유)
+    members_by: dict[str, list] = {}
+    for r in rn.query(Q.HEYA_MEMBERS_ALL):
+        members_by.setdefault(str(r[0]), []).append(r[1:10])
+
     cards = []
     for r in rows:
         (slug, name, name_ja, name_en, yt, x, ig, url, n_active, n_sekitori) = r[:10]
@@ -701,7 +716,7 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
             links.append(f'<a class="chip" href="{e(url)}"'
                          f' target="_blank" rel="noopener">공식</a>')
 
-        members = rn.query(Q.HEYA_MEMBERS, (slug,))
+        members = members_by.get(str(slug), [])
         mnames = " · ".join(e(m[1]) for m in members[:6])  # 이름만
         if len(members) > 6:
             mnames += f" 외 {len(members) - 6}명"

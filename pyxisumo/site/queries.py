@@ -41,6 +41,10 @@ SELECT rank_value, division::text, rank_kind::text, rank_num, side::text,
        heya_ja
 FROM v_banzuke
 WHERE basho_id = %s
+  -- 마쿠시타는 예측 재료로만 받는다 (쥬료 승격 후보를 알기 위해).
+  -- 화면에 내보내면 프로필 페이지가 없는 선수로 링크가 걸려 깨지고,
+  -- 머리글의 '총 70명' 과도 어긋난다.
+  AND division IN ('Makuuchi','Juryo')
 ORDER BY rank_value
 """
 
@@ -132,6 +136,69 @@ LEFT JOIN LATERAL (
 ) s ON true
 LEFT JOIN heya h ON h.id = r.heya_id
 ORDER BY hi.best_rank_value, r.id
+"""
+
+# --- 한 번에 다 가져오는 판 ---------------------------------------------
+#
+# 선수 한 명마다 따로 물어보면 원격 DB(Supabase)에서 감당이 안 된다.
+# 왕복 한 번에 0.1초만 잡아도 선수 1,500명 × 2번 = 5분이 그냥 간다.
+# 본바쇼 중에는 20분마다 갱신이 도는데 생성이 20분 걸리면 서로 취소돼
+# **사이트가 영영 갱신되지 않는다.** 그래서 통째로 받아 파이썬에서 묶는다.
+
+RIKISHI_HISTORY_ALL = """
+SELECT be.rikishi_id,
+       be.basho_id,
+       COALESCE(b.name_ko, b.name_ja, be.basho_id) AS basho_name,
+       be.rank_label, be.rank_value, be.division::text,
+       be.wins, be.losses, be.absences,
+       be.rank_kind::text, be.rank_num, be.side::text
+FROM banzuke_entry be
+LEFT JOIN basho b ON b.id = be.basho_id
+WHERE be.division IN ('Makuuchi','Juryo')
+ORDER BY be.rikishi_id, be.basho_id DESC
+"""
+
+# 대전 기록을 동/서 양방향으로 펼쳐 한 번에 집계한다.
+RIKISHI_OPPONENTS_ALL = """
+WITH pair AS (
+  SELECT east_id AS me, west_id AS opp, winner_id FROM torikumi
+  UNION ALL
+  SELECT west_id AS me, east_id AS opp, winner_id FROM torikumi
+)
+SELECT p.me, p.opp,
+       COALESCE(s.name_ko, s.name_ja, s.name_en, '?') AS name,
+       count(*) AS bouts,
+       count(*) FILTER (WHERE p.winner_id = p.me)  AS wins,
+       count(*) FILTER (WHERE p.winner_id = p.opp) AS losses
+FROM pair p
+LEFT JOIN LATERAL (
+  SELECT * FROM shikona sk WHERE sk.rikishi_id = p.opp
+  ORDER BY sk.from_basho DESC LIMIT 1
+) s ON true
+GROUP BY p.me, p.opp, s.name_ko, s.name_ja, s.name_en
+HAVING count(*) >= 2
+ORDER BY p.me, count(*) DESC, p.opp
+"""
+
+# 헤야 소속 세키토리도 헤야마다 묻지 않고 한 번에.
+HEYA_MEMBERS_ALL = """
+SELECT h.slug, r.id,
+       COALESCE(s.name_ko, s.name_ja, s.name_en, '?') AS name,
+       be.rank_label, be.rank_value, be.basho_id,
+       be.rank_kind::text, be.rank_num, be.side::text, be.division::text
+FROM rikishi r
+JOIN heya h ON h.id = r.heya_id
+JOIN LATERAL (
+  SELECT * FROM banzuke_entry b
+  WHERE b.rikishi_id = r.id AND b.division IN ('Makuuchi','Juryo')
+  ORDER BY b.basho_id DESC LIMIT 1
+) be ON true
+LEFT JOIN LATERAL (
+  SELECT * FROM shikona sk WHERE sk.rikishi_id = r.id
+  ORDER BY sk.from_basho DESC LIMIT 1
+) s ON true
+WHERE r.retired_basho IS NULL
+ORDER BY h.slug, be.rank_value
 """
 
 # 한 리키시의 바쇼별 성적
@@ -231,6 +298,9 @@ ALL_QUERIES = {
     "PROFILE_RIKISHI": (PROFILE_RIKISHI, 0),
     "RIKISHI_HISTORY": (RIKISHI_HISTORY, 1),
     "RIKISHI_OPPONENTS": (RIKISHI_OPPONENTS, 1),
+    "RIKISHI_HISTORY_ALL": (RIKISHI_HISTORY_ALL, 0),
+    "RIKISHI_OPPONENTS_ALL": (RIKISHI_OPPONENTS_ALL, 0),
+    "HEYA_MEMBERS_ALL": (HEYA_MEMBERS_ALL, 0),
     "HEYA_LIST": (HEYA_LIST, 0),
     "HEYA_MEMBERS": (HEYA_MEMBERS, 1),
     "SITE_STATS": (SITE_STATS, 0),

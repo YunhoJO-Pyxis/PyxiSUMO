@@ -73,8 +73,12 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    # 사람이 손으로 고친 이름을 하나 심어 둔다
+    # 사람이 손으로 고친 이름을 하나 심어 둔다.
+    #  끝나면 반드시 되돌린다 — 안 그러면 뒤에 도는 검사가 요코즈나 자리에서
+    #  '손으로 고친 이름' 을 보고 엉뚱하게 실패한다 (실제로 그랬다).
     rid = rn.query("SELECT rikishi_id FROM shikona ORDER BY rikishi_id LIMIT 1")[0][0]
+    orig_name = rn.query("SELECT name_ko FROM shikona WHERE rikishi_id = %s",
+                         (rid,))[0][0]
     rn.execute("UPDATE shikona SET name_ko = %s WHERE rikishi_id = %s",
                ("손으로 고친 이름", rid))
 
@@ -133,6 +137,13 @@ def main() -> int:
     check("적재 단계가 돌지 않음",
           "데이터 적재" not in out and "받는 중" not in out,
           "출력에 적재 흔적이 있습니다")
+
+    # 심어 둔 값을 원래대로 돌려놓는다
+    rn.execute("UPDATE shikona SET name_ko = %s WHERE rikishi_id = %s",
+               (orig_name, rid))
+    back = rn.query("SELECT name_ko FROM shikona WHERE rikishi_id = %s", (rid,))
+    check("검사가 DB를 원래대로 돌려놓음", back and back[0][0] == orig_name,
+          f"'{back[0][0] if back else '?'}' 로 남았습니다")
 
     print()
     if FAIL:
