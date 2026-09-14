@@ -205,7 +205,15 @@ def main() -> int:
         check("반즈케 8행", scalar("SELECT count(*) FROM banzuke_entry") == "8",
               str(scalar("SELECT count(*) FROM banzuke_entry")))
         check("취조 2행", scalar("SELECT count(*) FROM torikumi") == "2")
-        check("키마리테 2행", scalar("SELECT count(*) FROM kimarite") == "2")
+        # 행 수로 세지 않는다 — db/005 가 자주 쓰는 결정수를 미리 넣어 두므로
+        # 표에는 용어집에서 온 것 말고도 행이 있다. 확인할 것은 '받아온 두 건이
+        # 제대로 들어갔는가' 이지 '표가 비어 있었는가' 가 아니다.
+        check("받아온 키마리테가 들어감",
+              scalar("SELECT count(*) FROM kimarite "
+                     "WHERE code IN ('oshidashi','yorikiri')") == "2")
+        check("키마리테 일본어 이름이 채워짐",
+              scalar("SELECT name_ja FROM kimarite WHERE code='yorikiri'") == "寄り切り",
+              str(scalar("SELECT name_ja FROM kimarite WHERE code='yorikiri'")))
 
         # 지위 파싱과 rank_value 인코딩
         rv = scalar("""

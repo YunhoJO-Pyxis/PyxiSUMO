@@ -31,7 +31,7 @@ from pyxisumo.sqlrunner import Runner, quote_literal  # noqa: E402
 # 확인용 데이터라도 사실과 어긋나면 안 된다.
 #
 # 기준 파일: tests/fixtures/banzuke_202609.json
-#   (일본상撲협회 공식 반즈케와 같은 내용 · Sumo-API 로 받아 고정해 둠)
+#   (일본스모협회(日本相撲協会) 공식 반즈케와 같은 내용 · Sumo-API 로 받아 고정해 둠)
 TRUTH = json.loads(
     (pathlib.Path(__file__).parent / "fixtures" / "banzuke_202609.json")
     .read_text(encoding="utf-8"))
@@ -66,9 +66,13 @@ def main() -> int:
     rng = random.Random(20260911)
 
     sql: list[str] = ["BEGIN;"]
+    # heya 까지 지운다. 앞서 돌아간 검사들이 'arashio' 같은 진짜 slug 로 헤야를
+    # 남겨 두는데, 그대로 두면 데모의 'demo2' 와 나란히 서서 같은 헤야가 두 번
+    # 나온다. 헤야 45곳처럼 보이지만 실제 데모 자료는 34곳이었다 —
+    # **검증용 자료가 실제보다 부풀면 검증이 의미를 잃는다.**
     for t in ("torikumi", "prediction_accuracy", "prediction_entry",
               "prediction_run", "banzuke_entry", "basho_award",
-              "shikona", "rikishi"):
+              "shikona", "rikishi", "heya_video", "heya"):
         sql.append(f"DELETE FROM {t};")
 
     # 헤야 — **실제 API 가 주는 모양대로** 영문만 넣는다.
@@ -249,6 +253,96 @@ def main() -> int:
                     f"{ea}, {we}, {win}, NULL) ON CONFLICT DO NOTHING;")
 
         order_next = order
+
+    # --- 쥬료에서 마쿠시타로 떨어진 선수 ---------------------------------
+    #  실제로 있었던 일이다: 후타고야마의 三田 는 2025년 11월에 쥬료 3매였고
+    #  2026년 9월 현재 마쿠시타 15매다. 그런데 헤야 페이지는 그를 계속
+    #  세키토리로 셌다 — 조회문이 '한 번이라도 쥬료였는가' 로 세고 있었다.
+    #
+    #  데모 자료에 이런 사람이 없으면 그 버그가 돌아와도 아무도 모른다.
+    #  그래서 한 명을 일부러 만들어 둔다 (tests/check_heya.py 가 본다).
+    #  옛 대회의 쥬료 자리 하나를 넘겨받는다 — 그 대회는 이력으로만 쓰이므로
+    #  예측·적중률 숫자에는 영향이 없다 (적중률은 마지막 두 대회로 잰다).
+    DEMOTED_ID = 900001
+    bid_old = BASHO[0][0]
+    sql.append(
+        "INSERT INTO rikishi (id, sumo_api_id, heya_id, debut_basho, height_cm, weight_kg) "
+        f"VALUES ({DEMOTED_ID}, 99001, "
+        "(SELECT heya_id FROM rikishi WHERE id = 1), '202409', 173, 115);")
+    sql.append(
+        "INSERT INTO shikona (rikishi_id, from_basho, name_ja, name_en, name_ko) "
+        f"VALUES ({DEMOTED_ID}, '202409', '降下野', 'Kokanoya', NULL);")
+    # 옛 대회의 쥬료 14매 서 자리를 비우고 그가 받는다
+    sql.append(
+        f"DELETE FROM banzuke_entry WHERE basho_id = {quote_literal(bid_old)} "
+        "AND rank_value = rank_value('Juryo','Numbered',14::smallint,'W'::side_t);")
+    sql.append(
+        "INSERT INTO banzuke_entry (basho_id, rikishi_id, division, rank_kind, "
+        "rank_num, side, rank_label, wins, losses, absences) VALUES "
+        f"({quote_literal(bid_old)}, {DEMOTED_ID}, 'Juryo', 'Numbered', 14, 'W', "
+        "'Juryo 14 West', 6, 9, 0);")
+    # 그리고 지금은 마쿠시타다 (마쿠시타는 예측 재료로만 받으므로 화면에 안 나온다)
+    sql.append(
+        "INSERT INTO banzuke_entry (basho_id, rikishi_id, division, rank_kind, "
+        "rank_num, side, rank_label, wins, losses, absences) VALUES "
+        f"({quote_literal(BASHO[-1][0])}, {DEMOTED_ID}, 'Makushita', 'Numbered', "
+        "15, 'W', 'Makushita 15 West', 0, 0, 0);")
+
+    # --- 진행 중인 대회의 대전표 -----------------------------------------
+    #  첫 화면의 '오늘의 대전' 을 확인하려면 **마지막 대회에도** 대전이 있어야
+    #  한다. 위 반복문은 과거 대회만 만든다 (마지막 대회는 픽스처에서 온다).
+    #
+    #  세 가지를 일부러 섞는다 — 이 세 모양이 화면에서 전부 달라야 한다.
+    #    1~2일째  결과가 다 들어온 날 (결정수까지)
+    #    3일째    치르는 중인 날 — 절반은 결과, 나머지는 '예정'
+    #             (실제로도 상위 대전은 그날 마지막에 치른다)
+    #    쥬료     마쿠우치 아래에 단 구분선이 그려지는지
+    bid_cur = BASHO[-1][0]
+    cur_order = [rid for rid, _ in sorted(
+        ((rid, rank_value(en["division"], en["kind"], en["num"], en["side"]))
+         for rid, en in enumerate(TRUTH["entries"], start=1)),
+        key=lambda t: t[1])]
+    maku = cur_order[:42]
+    juryo = cur_order[42:70]
+    # 결정수는 외래키다. 앞선 검사들이 kimarite 표를 비워 두고 끝나는 경우가
+    # 있어 (용어집 실패 시나리오), 여기서 쓸 코드는 직접 넣어 둔다.
+    # 그러지 않으면 대전 기록 전체가 외래키 위반으로 들어가지 못한다.
+    KIMARITE = (("yorikiri", "寄り切り", "요리키리"),
+                ("oshidashi", "押し出し", "오시다시"),
+                ("hatakikomi", "叩き込み", "하타키코미"),
+                ("tsukiotoshi", "突き落とし", "츠키오토시"),
+                ("uwatenage", "上手投げ", "우와테나게"),
+                ("okuridashi", "送り出し", "오쿠리다시"))
+    for code, ja, ko in KIMARITE:
+        sql.append(
+            "INSERT INTO kimarite (code, name_ja, name_ko) VALUES "
+            f"({quote_literal(code)}, {quote_literal(ja)}, {quote_literal(ko)}) "
+            "ON CONFLICT (code) DO UPDATE SET "
+            "name_ja = COALESCE(NULLIF(kimarite.name_ja, ''), EXCLUDED.name_ja), "
+            "name_ko = COALESCE(NULLIF(kimarite.name_ko, ''), EXCLUDED.name_ko);")
+    KIM_CODES = [c for c, _, _ in KIMARITE]
+    for day in (1, 2, 3):
+        for div, pool, n in (("Makuuchi", maku, 8), ("Juryo", juryo, 4)):
+            ids = list(pool)
+            rng.shuffle(ids)
+            # 요코즈나 두 명은 늘 마쿠우치 대전표에 들어가게 둔다
+            if div == "Makuuchi":
+                for fixed in (1, 2):
+                    if fixed in ids:
+                        ids.remove(fixed)
+                ids = [1, 2] + ids
+            for m in range(n):
+                ea, we = ids[m * 2], ids[m * 2 + 1]
+                # 마지막 날은 아직 치르는 중 — 뒤쪽 절반을 '예정'으로 남긴다
+                scheduled = day == 3 and m >= n // 2
+                win = "NULL" if scheduled else str(rng.choice([ea, we]))
+                kim = ("NULL" if scheduled
+                       else quote_literal(rng.choice(KIM_CODES)))
+                sql.append(
+                    "INSERT INTO torikumi (basho_id, day, division, match_no, "
+                    "east_id, west_id, winner_id, kimarite) VALUES "
+                    f"({quote_literal(bid_cur)}, {day}, {quote_literal(div)}, "
+                    f"{m + 1}, {ea}, {we}, {win}, {kim}) ON CONFLICT DO NOTHING;")
 
     sql.append("COMMIT;")
     rn.execute("\n".join(sql))

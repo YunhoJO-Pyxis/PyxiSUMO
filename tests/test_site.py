@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from pyxisumo import ichimon as I                     # noqa: E402
+from pyxisumo.heya_names import HEYA_JA, normalize     # noqa: E402
 from pyxisumo.ranks import DIVISION_CAPACITY          # noqa: E402
 from pyxisumo.site import guide as G                  # noqa: E402
 from pyxisumo.site.build import (  # noqa: E402
-    analytics_parts, banzuke_table, basho_label, csp_value, e, rank_ko,
-    rec_txt, with_ja,
+    analytics_parts, banzuke_table, basho_label, csp_value, division_jump, e,
+    rank_ko, rec_txt, with_ja,
 )
 
 
@@ -157,6 +160,103 @@ class TestWithJa(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(with_ja(None, None), "")
+
+
+class TestDivisionJump(unittest.TestCase):
+    """'마쿠우치 / 쥬료' 바로가기 단추."""
+
+    ROWS = [
+        (0, "Makuuchi", "Yokozuna", 1, "E", "x", 12, 3, 0, 9, 1,
+         "오노사토", "大の里", "Onosato", "", "니쇼노세키", "二所ノ関"),
+        (10000, "Juryo", "Numbered", 1, "E", "x", 9, 6, 0, 3, 4,
+         "엔도", "遠藤", "Endo", "", "오이와토", None),
+    ]
+
+    def test_makes_a_button_per_division(self):
+        h = division_jump(self.ROWS)
+        self.assertIn('href="#makuuchi"', h)
+        self.assertIn('href="#juryo"', h)
+        self.assertIn("마쿠우치", h)
+        self.assertIn("쥬료", h)
+
+    def test_anchors_exist_in_the_table(self):
+        """단추가 가리키는 자리가 표 안에 실제로 있어야 한다.
+
+        여기가 어긋나면 눌러도 아무 일이 없어 고장으로 보인다.
+        """
+        table = banzuke_table(self.ROWS)
+        for anchor in re.findall(r'href="#([a-z]+)"', division_jump(self.ROWS)):
+            self.assertIn(f'id="{anchor}"', table, f"#{anchor} 자리가 없음")
+
+    def test_no_button_for_a_division_that_is_absent(self):
+        only_maku = [self.ROWS[0]]
+        h = division_jump(only_maku, extra=[("torikumi", "오늘의 대전")])
+        self.assertNotIn("juryo", h)
+        self.assertIn("오늘의 대전", h)
+
+    def test_single_target_makes_no_bar(self):
+        """단추가 하나뿐이면 줄을 만들지 않는다 — 누를 곳이 없는 막대는 군더더기."""
+        self.assertEqual(division_jump([self.ROWS[0]]), "")
+
+    def test_extra_links_come_first(self):
+        h = division_jump(self.ROWS, extra=[("torikumi", "오늘의 대전")])
+        self.assertLess(h.index("오늘의 대전"), h.index("마쿠우치"))
+
+
+class TestIchimon(unittest.TestCase):
+    """일문 표 — 사실을 주장하므로 모양과 개수를 묶어 둔다.
+
+    출처: ja.wikipedia.org/wiki/相撲部屋 '현존하는 헤야' 표 (45곳, 2026-09 확인).
+    常盤山 은 2026년 1월에 湊川 으로 개칭돼 표에는 없지만, API 에 아직
+    남아 있어 별칭으로 하나 더 넣는다 → 니쇼노세키만 17+1 = 18.
+    """
+
+    EXPECTED = {"dewanoumi": 14, "nishonoseki": 18, "tokitsukaze": 5,
+                "takasago": 4, "isegahama": 5}
+
+    def test_counts_match_the_source(self):
+        from collections import Counter
+        got = dict(Counter(I.HEYA_ICHIMON.values()))
+        self.assertEqual(got, self.EXPECTED)
+
+    def test_every_value_is_a_known_ichimon(self):
+        for heya, code in I.HEYA_ICHIMON.items():
+            self.assertIn(code, I.ICHIMON_NAMES, f"{heya} 의 일문 코드가 표에 없음")
+
+    def test_order_covers_every_ichimon(self):
+        self.assertEqual(sorted(I.ICHIMON_ORDER), sorted(I.ICHIMON_NAMES))
+
+    def test_keys_are_normalized(self):
+        for k in I.HEYA_ICHIMON:
+            self.assertEqual(k, normalize(k), f"{k} 는 정규화된 형태가 아니다")
+
+    def test_every_heya_here_has_a_known_kanji(self):
+        """일문을 아는 헤야는 한자도 알아야 한다 — 화면에 반쪽만 나오면 이상하다."""
+        missing = [k for k in I.HEYA_ICHIMON if k not in HEYA_JA]
+        self.assertEqual(missing, [], f"heya_names.py 에 없는 헤야: {missing}")
+
+    def test_lookup_handles_real_api_spellings(self):
+        self.assertEqual(I.ichimon_for("Nishonoseki"), "nishonoseki")
+        self.assertEqual(I.ichimon_for("NISHONOSEKI"), "nishonoseki")
+        self.assertEqual(I.ichimon_for("Nishonoseki-beya"), "nishonoseki")
+        self.assertEqual(I.ichimon_for("Futagoyama"), "dewanoumi")
+
+    def test_unknown_is_none_not_a_guess(self):
+        """모르는 헤야에 일문을 붙이면 사이트가 거짓을 말한다."""
+        self.assertIsNone(I.ichimon_for("Nonexistentbeya"))
+        self.assertIsNone(I.ichimon_for(""))
+        self.assertIsNone(I.ichimon_for(None))
+
+    def test_label(self):
+        self.assertEqual(I.ichimon_label("dewanoumi"), ("데와노우미", "出羽海"))
+        self.assertEqual(I.ichimon_label(None), ("", ""))
+        self.assertEqual(I.ichimon_label("nope"), ("", ""))
+
+    def test_closed_heya_are_not_assigned(self):
+        """없어진 헤야에 지금의 일문을 붙이지 않는다 (지금의 일문이 없으므로)."""
+        for gone in ("miyagino", "oguruma", "azumazeki", "chiganoura",
+                     "irumagawa", "minezaki", "kagamiyama"):
+            self.assertNotIn(gone, I.HEYA_ICHIMON, f"{gone} 은 현존 헤야가 아니다")
 
 
 class TestGuideContent(unittest.TestCase):

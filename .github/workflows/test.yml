@@ -83,6 +83,18 @@ jobs:
       - name: 반즈케 내용이 실제와 맞는지 검증
         run: python tests/check_banzuke_truth.py --dir /tmp/site
 
+      - name: 오늘의 대전 — 승패·역대 전적이 DB와 맞는지
+        run: DATABASE_URL="$TEST_DSN" python tests/check_torikumi.py --dir /tmp/site --require
+
+      - name: 오늘의 대전 검사기가 틀린 화면을 잡는지
+        run: DATABASE_URL="$TEST_DSN" python tests/check_torikumi.py --dir /tmp/site --fail-demo
+
+      - name: 헤야 — 세키토리 수·명단·일문이 DB와 맞는지
+        run: DATABASE_URL="$TEST_DSN" python tests/check_heya.py --dir /tmp/site
+
+      - name: 헤야 검사기가 옛 버그를 잡는지
+        run: DATABASE_URL="$TEST_DSN" python tests/check_heya.py --dir /tmp/site --fail-demo
+
       - name: 예측 페이지 (발표됨 / 발표 전)
         run: DATABASE_URL="$TEST_DSN" python tests/check_yosou.py
 

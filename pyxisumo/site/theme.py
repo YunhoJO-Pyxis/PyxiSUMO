@@ -340,6 +340,100 @@ td.name a:hover { text-decoration: underline; }
 .note strong { color: var(--ink); }
 .note :last-child { margin-bottom: 0; }
 
+/* ── 바로가기 단추 ──────────────────── */
+.jumpbar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 5;
+  padding: 10px 0; margin: 0 0 18px;
+  background: var(--ground); border-bottom: 1px solid var(--rule);
+}
+.jump {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 7px 14px; border: 1px solid var(--rule-strong);
+  background: var(--surface); color: var(--ink);
+  font-size: .84rem; font-weight: 600; text-decoration: none;
+}
+.jump span { font-family: var(--f-display); font-weight: 400;
+             font-size: .76rem; color: var(--ink-3); }
+.jump:hover { border-color: var(--indigo); color: var(--indigo); }
+button.jump { cursor: pointer; font-family: inherit; }
+button.jump.is-on {
+  background: var(--ink); color: var(--ground); border-color: var(--ink);
+}
+button.jump.is-on span { color: var(--ground); opacity: .7; }
+:root[data-theme="dark"] button.jump.is-on,
+:root[data-theme="dark"] button.jump.is-on span { color: #11151A; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.jump.is-on,
+  :root:not([data-theme="light"]) button.jump.is-on span { color: #11151A; }
+}
+
+/* 헤야 카드의 일문 줄 */
+.card .mon {
+  font-size: .76rem; color: var(--indigo); margin-top: 5px; font-weight: 500;
+}
+.card .mon span { font-family: var(--f-display); color: var(--ink-3); font-weight: 400; }
+.card .mon.unknown { color: var(--ink-3); font-weight: 400; }
+/* 고정된 단추 줄에 가려지지 않도록 목적지를 조금 내린다 */
+.div-break, h2[id] { scroll-margin-top: 58px; }
+
+/* ── 그날의 대전 ────────────────────── */
+.tk-sub { font-size: .84rem; color: var(--ink-3); margin: -6px 0 14px; }
+.torikumi { border: 1px solid var(--rule); background: var(--surface);
+            margin: 0 0 12px; }
+.tk-row {
+  display: grid; grid-template-columns: 1fr minmax(120px, 168px) 1fr;
+  border-bottom: 1px solid var(--rule); align-items: center;
+}
+.tk-row:last-child { border-bottom: none; }
+.tk-row:hover { background: var(--surface-2); }
+.tk-side { padding: 9px 16px; min-width: 0; }
+.tk-side.w { text-align: right; }
+.tk-rank {
+  font-family: var(--f-mono); font-size: .68rem; letter-spacing: .06em;
+  color: var(--ink-3); margin-bottom: 1px;
+}
+.tk-name { font-weight: 600; font-size: .98rem; }
+.tk-name a { color: var(--ink); text-decoration: none; }
+.tk-name a:hover { text-decoration: underline; }
+.tk-win, .tk-lose {
+  display: inline-block; margin-inline: 5px; padding: .05em .4em;
+  font-size: .68rem; font-weight: 600; vertical-align: middle;
+}
+.tk-win  { background: var(--moss-soft); color: var(--moss); }
+.tk-lose { background: var(--surface-2); color: var(--ink-3); }
+.tk-mid {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 6px; border-inline: 1px solid var(--rule); text-align: center;
+}
+.tk-kimarite { font-family: var(--f-display); font-size: .82rem; color: var(--ink-2); }
+.tk-pending { font-size: .78rem; color: var(--indigo); }
+.tk-h2h {
+  font-family: var(--f-mono); font-size: .72rem; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.tk-h2h b { color: var(--ink); font-weight: 600; }
+.tk-h2h i { font-style: normal; margin-inline: 3px; color: var(--ink-3); }
+.tk-h2h.first { font-family: var(--f-body); }
+.tk-note { font-size: .78rem; color: var(--ink-3); margin: 0 0 26px; max-width: 70ch; }
+
+@media (max-width: 640px) {
+  .tk-row { grid-template-columns: 1fr; }
+  .tk-side.w { text-align: left; }
+  /* 위아래로 쌓이면 어느 쪽이 東인지 위치로 알 수 없다 */
+  .tk-side { position: relative; }
+  .tk-side::before {
+    content: attr(data-side);
+    position: absolute; right: 16px; top: 9px;
+    font-family: var(--f-display); font-size: .7rem; color: var(--ink-3);
+  }
+  .tk-mid {
+    order: 3; flex-direction: row; gap: 10px; justify-content: flex-start;
+    border-inline: none; border-top: 1px dashed var(--rule);
+    padding-inline: 16px;
+  }
+}
+
 /* ── 기초 지식 ──────────────────────── */
 .g-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 34px; }
 .g-sec { margin: 0 0 40px; scroll-margin-top: 20px; }
@@ -378,6 +472,53 @@ td.name a:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+"""
+
+FILTER_JS = """
+/* 헤야 목록을 일문으로 거른다.
+   자료는 이미 카드의 data-ichimon 에 들어 있다. 서버도 fetch 도 필요 없고,
+   파일을 직접 열어도(file://) 그대로 동작한다. */
+(function () {
+  var bar = document.getElementById('ichimon-filter');
+  var wrap = document.getElementById('heya-cards');
+  var empty = document.getElementById('heya-empty');
+  if (!bar || !wrap) return;
+
+  var cards = [].slice.call(wrap.querySelectorAll('[data-ichimon]'));
+  var buttons = [].slice.call(bar.querySelectorAll('[data-filter]'));
+
+  function apply(which) {
+    var shown = 0;
+    cards.forEach(function (c) {
+      var on = which === 'all' || c.getAttribute('data-ichimon') === which;
+      c.hidden = !on;
+      if (on) shown++;
+    });
+    buttons.forEach(function (b) {
+      var on = b.getAttribute('data-filter') === which;
+      if (on) { b.classList.add('is-on'); } else { b.classList.remove('is-on'); }
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (empty) empty.hidden = shown !== 0;
+    // 주소창에도 남겨 둔다 — 링크로 공유하거나 새로고침해도 같은 화면이 나온다
+    try {
+      var url = new URL(window.location.href);
+      if (which === 'all') { url.hash = ''; } else { url.hash = 'mon-' + which; }
+      history.replaceState(null, '', url.toString());
+    } catch (err) { /* file:// 에서는 막힐 수 있다 — 걸러내기 자체는 계속 된다 */ }
+  }
+
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      apply(b.getAttribute('data-filter'));
+    });
+  });
+
+  var h = (window.location.hash || '').replace('#mon-', '');
+  if (h && buttons.some(function (b) { return b.getAttribute('data-filter') === h; })) {
+    apply(h);
+  }
+})();
 """
 
 SEARCH_JS = """

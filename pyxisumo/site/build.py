@@ -28,12 +28,13 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from ..ichimon import ICHIMON_ORDER, ichimon_for, ichimon_label
 from ..romaji import shikona_only
 from ..sqlrunner import Runner, SqlError
 from . import queries as Q
 from .guide import SECTIONS as GUIDE_SECTIONS
 from .guide import SOURCES as GUIDE_SOURCES
-from .theme import CSS, SEARCH_JS
+from .theme import CSS, FILTER_JS, SEARCH_JS
 
 SITE_NAME = "PyxiSUMO"
 SITE_TAGLINE = "스모의 나침반"
@@ -331,6 +332,31 @@ def page(
 # ---------------------------------------------------------------------
 #  반즈케 표
 # ---------------------------------------------------------------------
+DIV_ANCHOR = {"Makuuchi": "makuuchi", "Juryo": "juryo", "Makushita": "makushita"}
+
+
+def division_jump(rows: Sequence[Sequence[Any]], extra: Sequence[tuple[str, str]] = ()) -> str:
+    """'마쿠우치 / 쥬료' 바로가기 단추.
+
+    표에 실제로 들어 있는 단만 만든다. 쥬료가 없는 대회에 쥬료 단추를 두면
+    눌러도 아무 일이 안 일어나 고장처럼 보인다.
+    """
+    seen: list[str] = []
+    for r in rows:
+        div = str(r[1])
+        if div not in seen:
+            seen.append(div)
+    chips = [f'<a class="jump" href="#{e(a)}">{e(t)}</a>' for a, t in extra]
+    chips += [
+        f'<a class="jump" href="#{DIV_ANCHOR.get(d, d.lower())}">'
+        f'{e(DIV_KO.get(d, d))} <span>{e(DIV_JA.get(d, ""))}</span></a>'
+        for d in seen if d in DIV_ANCHOR
+    ]
+    if len(chips) < 2:
+        return ""
+    return f'<nav class="jumpbar" aria-label="바로가기">{"".join(chips)}</nav>'
+
+
 def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
     """rank_value 기준으로 東/西 를 한 줄에 묶어 그린다."""
     up = "../" * depth
@@ -377,7 +403,8 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
         div = s["division"]
         if div not in seen_div:
             seen_div.add(div)
-            out.append(f'<div class="div-break">{e(DIV_KO.get(div, div))}'
+            out.append(f'<div class="div-break" id="{DIV_ANCHOR.get(div, div.lower())}">'
+                       f'{e(DIV_KO.get(div, div))}'
                        f' · {e(DIV_JA.get(div, ""))}</div>')
         ko, numtxt = rank_display(s["kind"], s["num"], div)
         ja = RANK_JA.get(s["kind"], "") or DIV_JA.get(div, "")
@@ -397,12 +424,102 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
 # ---------------------------------------------------------------------
 #  각 페이지
 # ---------------------------------------------------------------------
+def torikumi_section(rn: Runner, bid: str, status: str) -> str:
+    """그날의 대전표. 역대 상대 전적을 함께 붙인다.
+
+    대전이 하나도 없으면 **빈 상자를 만들지 않고 아무것도 내보내지 않는다.**
+    개막 전에 '오늘의 대전 (0경기)' 가 떠 있으면 고장으로 보인다.
+    """
+    day_rows = rn.query(Q.TORIKUMI_LATEST_DAY, (bid,))
+    day = i(day_rows[0][0]) if day_rows and day_rows[0][0] else 0
+    if not day:
+        return ""
+    rows = rn.query(Q.TORIKUMI_DAY, (bid, day))
+    if not rows:
+        return ""
+
+    def fighter(rid, name, ja, div, kind, num, won, lost, right=False) -> str:
+        cls = "tk-side" + (" w" if right else "")
+        label = "西" if right else "東"
+        badge = ""
+        if won:
+            badge = '<span class="tk-win">승</span>'
+        elif lost:
+            badge = '<span class="tk-lose">패</span>'
+        # 지위에서 동·서는 뗀다. 반즈케상의 동·서와 이 대전의 동·서는 서로
+        # 다른 값이라, 나란히 두면 '西 자리에 앉은 東 오제키' 처럼 읽혀 헷갈린다.
+        # 이 대전의 동·서는 왼쪽/오른쪽 위치로 보인다.
+        rk = rank_ko(kind, num, "", div)
+        return (
+            f'<div class="{cls}" data-side="{label}">'
+            f'<div class="tk-rank">{e(rk)}</div>'
+            f'<div class="tk-name"><a href="rikishi/{e(rid)}.html">{e(name)}</a>{badge}</div>'
+            + (f'<div class="bz-ja">{e(shikona_only(ja))}</div>' if ja else "")
+            + "</div>"
+        )
+
+    cards = []
+    seen_div: set[str] = set()
+    for r in rows:
+        (division, _mno,
+         eid, ename, eja, ediv, ekind, enum, _eside,
+         wid, wname, wja, wdiv, wkind, wnum, _wside,
+         winner, kimarite, fusen, bouts, ewins, wwins) = r[:22]
+
+        if division not in seen_div:
+            seen_div.add(division)
+            cards.append(
+                f'<div class="div-break">{e(DIV_KO.get(division, division))}'
+                f' · {e(DIV_JA.get(division, ""))}</div>')
+
+        e_won = bool(winner) and str(winner) == str(eid)
+        w_won = bool(winner) and str(winner) == str(wid)
+        is_fusen = str(fusen).lower() in ("t", "true", "1")
+
+        if not winner:
+            mid = '<span class="tk-pending">예정</span>'
+        elif is_fusen:
+            mid = '<span class="tk-kimarite">부전승</span>'
+        else:
+            mid = f'<span class="tk-kimarite">{e(kimarite or "—")}</span>'
+
+        # 역대 전적. 두 사람이 처음 붙는 날이면 숫자 대신 그렇게 적는다.
+        if i(bouts) <= 0:
+            h2h = '<span class="tk-h2h first">첫 대전</span>'
+        else:
+            h2h = (f'<span class="tk-h2h">역대 <b>{i(ewins)}</b>'
+                   f'<i>:</i><b>{i(wwins)}</b></span>')
+
+        cards.append(
+            '<div class="tk-row">'
+            + fighter(eid, ename, eja, ediv, ekind, enum, e_won, w_won)
+            + f'<div class="tk-mid">{mid}{h2h}</div>'
+            + fighter(wid, wname, wja, wdiv, wkind, wnum, w_won, e_won, right=True)
+            + "</div>"
+        )
+
+    done = sum(1 for r in rows if r[16])
+    head = "오늘의 대전" if status == "ongoing" else "마지막 대전"
+    sub = (f"{day}일째 · {len(rows)}경기"
+           + (f" · {done}경기 종료" if done else " · 아직 결과 없음"))
+
+    return f"""
+<h2 id="torikumi">{e(head)}</h2>
+<p class="tk-sub">{e(sub)}</p>
+<div class="torikumi">{"".join(cards)}</div>
+<p class="tk-note">왼쪽이 東(동), 오른쪽이 西(서)입니다.
+  '역대'는 이 사이트가 받아 둔 대전 기록에서 센 두 선수의 통산 전적으로,
+  왼쪽 숫자가 東 선수의 승수입니다.</p>
+"""
+
+
 def build_index(rn: Runner, out: Path, basho: Sequence, gen: str) -> None:
     stats = rn.query(Q.SITE_STATS)
     st = stats[0] if stats else (0, 0, 0, 0, "", "")
     cur = basho[0]
     bid, name, name_ja, venue, start, end, status, n_entries, played = cur[:9]
     rows = rn.query(Q.BANZUKE, (bid,))
+    tk = torikumi_section(rn, bid, str(status))
 
     pill = f'<span class="status-pill st-{e(status)}">{e(STATUS_KO.get(status, status))}</span>'
     when = f"{start} ~ {end}" if start and end else ""
@@ -414,6 +531,8 @@ def build_index(rn: Runner, out: Path, basho: Sequence, gen: str) -> None:
   <p class="sub">{e(when)} · 총 {i(n_entries)}명</p>
 </div>
 <main>
+{division_jump(rows, extra=([("torikumi", "오늘의 대전")] if tk else []))}
+{tk}
 {banzuke_table(rows)}
 <h2>수록 현황</h2>
 <div class="grid">
@@ -470,7 +589,10 @@ def build_banzuke_pages(rn: Runner, out: Path, basho: Sequence, gen: str) -> Non
   <h1>{e(basho_label(bid))} {e(with_ja(name, name_ja))}{pill}</h1>
   <p class="sub">{e(start or "")} ~ {e(end or "")} · {i(n)}명</p>
 </div>
-<main>{banzuke_table(rows, depth=1)}</main>
+<main>
+{division_jump(rows)}
+{banzuke_table(rows, depth=1)}
+</main>
 """
         (d / f"{bid}.html").write_text(
             page(title=f"{basho_label(bid)} {name}", body=pbody, depth=1,
@@ -799,6 +921,7 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
         members_by.setdefault(str(r[0]), []).append(r[1:10])
 
     cards = []
+    n_by_mon: dict[str, int] = {}
     for r in rows:
         (slug, name, name_ja, name_en, yt, x, ig, url, n_active, n_sekitori) = r[:10]
         links = []
@@ -820,30 +943,59 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
         if len(members) > 6:
             mnames += f" 외 {len(members) - 6}명"
 
+        mon = ichimon_for(name_en)
+        n_by_mon[mon or "unknown"] = n_by_mon.get(mon or "unknown", 0) + 1
+        mon_ko, mon_ja = ichimon_label(mon)
+        mon_txt = (f'<div class="mon">{e(mon_ko)} 일문 <span>{e(mon_ja)}一門</span></div>'
+                   if mon else '<div class="mon unknown">일문 미상</div>')
+
         cards.append(
-            f'<div class="card"><div class="t">{e(with_ja(name, name_ja))}</div>'
+            f'<div class="card" data-ichimon="{e(mon or "unknown")}">'
+            f'<div class="t">{e(with_ja(name, name_ja))}</div>'
             f'<div class="ja">{e(name_en or "")}</div>'
-            f'<div class="m">세키토리 {i(n_sekitori)}명'
+            + mon_txt
+            + f'<div class="m">세키토리 {i(n_sekitori)}명'
             + (f" · {mnames}" if mnames else "")
             + "</div>"
             + (f'<div class="links">{"".join(links)}</div>' if links else "")
             + "</div>"
         )
 
+    # 일문 단추. 자료에 실제로 있는 일문만 만든다 — 0곳짜리 단추를 누르면
+    # 빈 화면이 나와서 고장으로 보인다.
+    chips = [f'<button type="button" class="jump is-on" data-filter="all">'
+             f'전체 <span>{len(rows)}</span></button>']
+    for code in ICHIMON_ORDER:
+        n = n_by_mon.get(code, 0)
+        if not n:
+            continue
+        ko, ja = ichimon_label(code)
+        chips.append(f'<button type="button" class="jump" data-filter="{e(code)}">'
+                     f'{e(ko)} <span>{n}</span></button>')
+    if n_by_mon.get("unknown"):
+        chips.append('<button type="button" class="jump" data-filter="unknown">'
+                     f'일문 미상 <span>{n_by_mon["unknown"]}</span></button>')
+
     body = f"""
 <div class="page-head">
   <p class="eyebrow">헤야 디렉토리</p>
   <h1>스모 헤야</h1>
-  <p class="sub">{len(rows)}개 헤야. 공식 YouTube·SNS 가 확인된 곳은 링크를 붙였습니다.</p>
+  <p class="sub">{len(rows)}개 헤야. 일문(一門)으로 걸러 볼 수 있습니다.</p>
 </div>
 <main>
+<nav class="jumpbar" id="ichimon-filter" aria-label="일문 고르기">{"".join(chips)}</nav>
+<p class="tk-note" id="filter-note">일문은 헤야들의 계보 그룹입니다. 같은 일문끼리는
+  원칙적으로 본대회에서 맞붙지 않습니다.
+  자세한 설명은 <a href="../guide.html#ichimon">스모 기초 지식</a>에 있습니다.</p>
 <div class="note">
   <p>협회가 2025년 4월 통달로 헤야 SNS 를 규제하면서,
   <strong>본대회 기간 중에는 새 영상이 올라오지 않습니다.</strong>
   홀수 달에 채널이 조용한 것은 정상입니다.</p>
 </div>
-<div class="cards">{"".join(cards)}</div>
+<div class="cards" id="heya-cards">{"".join(cards)}</div>
+<p class="search-empty" id="heya-empty" hidden>이 일문에 해당하는 헤야가 없습니다.</p>
 </main>
+<script src="../assets/filter.js"></script>
 """
     (d / "index.html").write_text(
         page(title="스모 헤야", body=body, depth=1, current="heya", generated=gen,
@@ -957,6 +1109,7 @@ def build_site(dsn: str, outdir: str | Path, *, quiet: bool = False,
     assets.mkdir(parents=True, exist_ok=True)
     (assets / "style.css").write_text(CSS, encoding="utf-8")
     (assets / "search.js").write_text(SEARCH_JS, encoding="utf-8")
+    (assets / "filter.js").write_text(FILTER_JS, encoding="utf-8")
     # GitHub Pages 가 Jekyll 로 처리하지 않도록
     (out / ".nojekyll").write_text("", encoding="utf-8")
     (out / "robots.txt").write_text(ROBOTS_TXT, encoding="utf-8")

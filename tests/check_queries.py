@@ -24,6 +24,8 @@ from pyxisumo.sqlrunner import Runner, SqlError   # noqa: E402
 EXPECTED_COLS = {
     "BASHO_LIST": 9,
     "BANZUKE": 17,
+    "TORIKUMI_LATEST_DAY": 1,
+    "TORIKUMI_DAY": 22,
     "LATEST_PREDICTION": 5,
     "PREDICTION_ENTRIES": 25,
     "ACCURACY_HISTORY": 8,
@@ -66,9 +68,17 @@ def params_for(rn: Runner) -> dict[str, object]:
     """, rikishi)
     # run_id 는 bigint 다 — 바쇼 ID 문자열을 넣으면 조회문이 아니라 검사가 틀린다
     run_id = scalar(rn, "SELECT max(id) FROM prediction_run", 0)
+    # 실제로 대전이 들어 있는 (대회, 날) 을 고른다 — 0행이면 컬럼 수를 못 본다
+    tk = rn.query("""
+        SELECT basho_id, max(day) FROM torikumi
+        GROUP BY basho_id ORDER BY basho_id DESC LIMIT 1
+    """)
+    tk_basho, tk_day = (tk[0][0], tk[0][1]) if tk else (basho, 1)
     return {
         "BASHO_LIST": None,
         "BANZUKE": (basho,),
+        "TORIKUMI_LATEST_DAY": (tk_basho,),
+        "TORIKUMI_DAY": (tk_basho, tk_day),
         "LATEST_PREDICTION": None,
         "PREDICTION_ENTRIES": (run_id,),
         "ACCURACY_HISTORY": None,
@@ -87,6 +97,8 @@ def params_for(rn: Runner) -> dict[str, object]:
 ALL = {
     "BASHO_LIST": Q.BASHO_LIST,
     "BANZUKE": Q.BANZUKE,
+    "TORIKUMI_LATEST_DAY": Q.TORIKUMI_LATEST_DAY,
+    "TORIKUMI_DAY": Q.TORIKUMI_DAY,
     "LATEST_PREDICTION": Q.LATEST_PREDICTION,
     "PREDICTION_ENTRIES": Q.PREDICTION_ENTRIES,
     "ACCURACY_HISTORY": Q.ACCURACY_HISTORY,

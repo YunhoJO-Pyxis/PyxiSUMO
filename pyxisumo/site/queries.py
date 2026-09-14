@@ -180,7 +180,7 @@ HAVING count(*) >= 2
 ORDER BY p.me, count(*) DESC, p.opp
 """
 
-# 헤야 소속 세키토리도 헤야마다 묻지 않고 한 번에.
+# 헤야 소속 세키토리도 헤야마다 묻지 않고 한 번에. (기준은 HEYA_MEMBERS 와 같다)
 HEYA_MEMBERS_ALL = """
 SELECT h.slug, r.id,
        COALESCE(s.name_ko, s.name_ja, s.name_en, '?') AS name,
@@ -188,11 +188,10 @@ SELECT h.slug, r.id,
        be.rank_kind::text, be.rank_num, be.side::text, be.division::text
 FROM rikishi r
 JOIN heya h ON h.id = r.heya_id
-JOIN LATERAL (
-  SELECT * FROM banzuke_entry b
-  WHERE b.rikishi_id = r.id AND b.division IN ('Makuuchi','Juryo')
-  ORDER BY b.basho_id DESC LIMIT 1
-) be ON true
+JOIN banzuke_entry be
+  ON be.rikishi_id = r.id
+ AND be.basho_id = (SELECT max(basho_id) FROM banzuke_entry)
+ AND be.division IN ('Makuuchi','Juryo')
 LEFT JOIN LATERAL (
   SELECT * FROM shikona sk WHERE sk.rikishi_id = r.id
   ORDER BY sk.from_basho DESC LIMIT 1
@@ -236,7 +235,17 @@ LIMIT 20
 """
 
 # 헤야 디렉토리
+# '세키토리' 는 **지금** 마쿠우치·쥬료에 있는 사람이다.
+#
+#   예전 판은 "마쿠우치·쥬료 기록이 한 번이라도 있는가" 로 셌다. 그래서
+#   쥬료에 있다가 마쿠시타로 떨어진 선수(예: 후타고야마의 三田 — 2025년
+#   11월 쥬료 3매, 2026년 9월 현재 마쿠시타 15매)가 계속 세키토리로
+#   잡혔다. 한 번 관취가 된 사람은 영원히 관취로 남는 셈이었다.
+#
+#   기준은 최신 반즈케다. 그 반즈케에 이름이 없으면(휴장·번付외) 세키토리가
+#   아니다 — 실제 대우도 그렇다.
 HEYA_LIST = """
+WITH cur AS (SELECT max(basho_id) AS bid FROM banzuke_entry)
 SELECT h.slug,
        COALESCE(h.name_ko, h.name_ja, h.name_en, h.slug) AS name,
        h.name_ja, h.name_en,
@@ -249,7 +258,9 @@ LEFT JOIN (
          count(*) AS n_active,
          count(*) FILTER (WHERE EXISTS (
            SELECT 1 FROM banzuke_entry be
-           WHERE be.rikishi_id = r.id AND be.division IN ('Makuuchi','Juryo')
+           WHERE be.rikishi_id = r.id
+             AND be.basho_id = (SELECT bid FROM cur)
+             AND be.division IN ('Makuuchi','Juryo')
          )) AS n_sekitori
   FROM rikishi r
   WHERE r.retired_basho IS NULL
@@ -258,7 +269,9 @@ LEFT JOIN (
 ORDER BY m.n_sekitori DESC NULLS LAST, h.slug
 """
 
-# 한 헤야 소속 세키토리
+# 한 헤야 소속 세키토리 — **최신 반즈케 기준** (위 HEYA_LIST 주석 참고).
+#   예전에는 '마지막으로 세키토리였던 대회'의 지위를 가져왔다. 그래서 지금은
+#   마쿠시타인 선수가 옛 쥬료 지위를 단 채 현역 세키토리처럼 보였다.
 HEYA_MEMBERS = """
 SELECT r.id,
        COALESCE(s.name_ko, s.name_ja, s.name_en, '?') AS name,
@@ -266,11 +279,10 @@ SELECT r.id,
        be.rank_kind::text, be.rank_num, be.side::text, be.division::text
 FROM rikishi r
 JOIN heya h ON h.id = r.heya_id AND h.slug = %s
-JOIN LATERAL (
-  SELECT * FROM banzuke_entry b
-  WHERE b.rikishi_id = r.id AND b.division IN ('Makuuchi','Juryo')
-  ORDER BY b.basho_id DESC LIMIT 1
-) be ON true
+JOIN banzuke_entry be
+  ON be.rikishi_id = r.id
+ AND be.basho_id = (SELECT max(basho_id) FROM banzuke_entry)
+ AND be.division IN ('Makuuchi','Juryo')
 LEFT JOIN LATERAL (
   SELECT * FROM shikona sk WHERE sk.rikishi_id = r.id
   ORDER BY sk.from_basho DESC LIMIT 1
@@ -289,8 +301,77 @@ SELECT (SELECT count(*) FROM rikishi)                               AS rikishi,
        (SELECT max(basho_id) FROM banzuke_entry)                     AS last_basho
 """
 
+# ---------------------------------------------------------------------
+#  그날의 대전 (取組) — 첫 화면의 '오늘의 대전'
+# ---------------------------------------------------------------------
+# 대전이 들어 있는 가장 마지막 날. 아직 결과가 없는 날(편성만 된 날)도
+# 포함한다 — 그날이 바로 '오늘의 대전표'이기 때문이다.
+TORIKUMI_LATEST_DAY = """
+SELECT max(day) FROM torikumi WHERE basho_id = %s
+"""
+
+# 역대 상대 전적을 **한 번에** 계산한다.
+#   대전마다 따로 물으면 하루 40경기 × 1회 = 40왕복이 된다. Supabase 처럼
+#   인터넷 너머에 있는 DB 에서는 이것만으로 20초가 날아간다 (fill_names 에서
+#   같은 실수를 한 적이 있다).
+#
+#   쌍은 (작은 id, 큰 id) 로 정규화한다. 그래야 東西가 바뀌어도 같은 쌍으로
+#   묶인다 — 실제로 대전마다 東西는 바뀐다.
+TORIKUMI_DAY = """
+WITH h2h AS (
+  SELECT least(east_id, west_id)  AS lo,
+         greatest(east_id, west_id) AS hi,
+         count(*) FILTER (WHERE winner_id IS NOT NULL) AS bouts,
+         count(*) FILTER (WHERE winner_id = least(east_id, west_id))    AS lo_wins,
+         count(*) FILTER (WHERE winner_id = greatest(east_id, west_id)) AS hi_wins
+  FROM torikumi
+  WHERE east_id IS NOT NULL AND west_id IS NOT NULL
+  GROUP BY 1, 2
+)
+SELECT t.division::text, t.match_no,
+       t.east_id, es.name, es.ja,
+       eb.division::text, eb.rank_kind::text, eb.rank_num, eb.side::text,
+       t.west_id, ws.name, ws.ja,
+       wb.division::text, wb.rank_kind::text, wb.rank_num, wb.side::text,
+       t.winner_id,
+       COALESCE(NULLIF(k.name_ko, ''), NULLIF(k.name_ja, ''),
+                NULLIF(k.name_en, ''), t.kimarite) AS kimarite,
+       t.is_fusen,
+       COALESCE(h.bouts, 0) AS bouts,
+       CASE WHEN t.east_id < t.west_id
+            THEN COALESCE(h.lo_wins, 0) ELSE COALESCE(h.hi_wins, 0) END AS east_wins,
+       CASE WHEN t.east_id < t.west_id
+            THEN COALESCE(h.hi_wins, 0) ELSE COALESCE(h.lo_wins, 0) END AS west_wins
+FROM torikumi t
+LEFT JOIN LATERAL (
+  SELECT COALESCE(sk.name_ko, sk.name_ja, sk.name_en, '?') AS name, sk.name_ja AS ja
+  FROM shikona sk WHERE sk.rikishi_id = t.east_id
+  ORDER BY sk.from_basho DESC LIMIT 1
+) es ON true
+LEFT JOIN LATERAL (
+  SELECT COALESCE(sk.name_ko, sk.name_ja, sk.name_en, '?') AS name, sk.name_ja AS ja
+  FROM shikona sk WHERE sk.rikishi_id = t.west_id
+  ORDER BY sk.from_basho DESC LIMIT 1
+) ws ON true
+LEFT JOIN banzuke_entry eb
+       ON eb.basho_id = t.basho_id AND eb.rikishi_id = t.east_id
+LEFT JOIN banzuke_entry wb
+       ON wb.basho_id = t.basho_id AND wb.rikishi_id = t.west_id
+LEFT JOIN kimarite k ON k.code = t.kimarite
+LEFT JOIN h2h h ON h.lo = least(t.east_id, t.west_id)
+               AND h.hi = greatest(t.east_id, t.west_id)
+WHERE t.basho_id = %s AND t.day = %s
+  AND t.division IN ('Makuuchi', 'Juryo')
+-- 지위가 높은 대전을 위에 놓는다. 실제 진행 순서(아래 지위부터)와는 반대지만,
+-- 화면에서는 요코즈나 대전을 맨 밑에서 찾게 만들지 않는 편이 낫다.
+ORDER BY least(COALESCE(eb.rank_value, 999999),
+               COALESCE(wb.rank_value, 999999)), t.match_no
+"""
+
 ALL_QUERIES = {
     "BASHO_LIST": (BASHO_LIST, 0),
+    "TORIKUMI_LATEST_DAY": (TORIKUMI_LATEST_DAY, 1),
+    "TORIKUMI_DAY": (TORIKUMI_DAY, 2),
     "BANZUKE": (BANZUKE, 1),
     "LATEST_PREDICTION": (LATEST_PREDICTION, 0),
     "PREDICTION_ENTRIES": (PREDICTION_ENTRIES, 1),

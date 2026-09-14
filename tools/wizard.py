@@ -581,8 +581,12 @@ def cmd_site(skip_names: bool = False) -> int:
         say()
         say("[2/2] 페이지 만드는 중...")
 
-    code = run(["-m", "pyxisumo.site.build", "--out", "docs"],
-               env={"DATABASE_URL": dsn})
+    # 방문 통계는 선택 사항이다. .env 에 적어 두면 여기서 만든 페이지에도
+    # 똑같이 들어가, GitHub 에 올리기 전에 미리 확인할 수 있다.
+    child = {"DATABASE_URL": dsn}
+    if env.get("PYXISUMO_ANALYTICS"):
+        child["PYXISUMO_ANALYTICS"] = env["PYXISUMO_ANALYTICS"]
+    code = run(["-m", "pyxisumo.site.build", "--out", "docs"], env=child)
     if code != 0:
         errmsg("만들지 못했습니다. 위 내용을 확인해 주세요.")
         return code

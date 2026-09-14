@@ -67,6 +67,10 @@ HEYA_JA: dict[str, str] = {
     "ajigawa": "安治川",
     "oshima": "大島",
     "miyagino": "宮城野",
+    "nishiiwa": "西岩",
+    "shibatayama": "芝田山",
+    "minatogawa": "湊川",
+    "asahiyama": "朝日山",
 }
 
 
