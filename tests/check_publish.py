@@ -59,7 +59,7 @@ def sandbox() -> Path:
 def publish_here(d: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "tools/publish.py", "--dry-run",
-         "--repo", "https://github.com/test/PyxiSumo"],
+         "--repo", "https://github.com/test/PyxiSUMO"],
         cwd=d, capture_output=True, text=True)
 
 
@@ -145,7 +145,7 @@ def main() -> int:
     #  --fix-nested 를 주면 지우지 않고 옮긴다
     r2 = subprocess.run(
         [sys.executable, "tools/publish.py", "--dry-run", "--fix-nested",
-         "--repo", "https://github.com/test/PyxiSumo"],
+         "--repo", "https://github.com/test/PyxiSUMO"],
         cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace")
     check("--fix-nested 로 정리하면 통과", r2.returncode == 0,
           (r2.stdout + r2.stderr).strip()[-160:])

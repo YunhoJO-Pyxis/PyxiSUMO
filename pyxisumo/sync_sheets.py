@@ -45,7 +45,7 @@ WHERE code = %s AND (name_ko IS DISTINCT FROM %s OR desc_ko IS DISTINCT FROM %s)
 
 def fetch_tab(sheet_id: str, tab: str) -> list[dict[str, str]]:
     url = CSV_URL.format(sheet_id=sheet_id, tab=urllib.parse.quote(tab))
-    req = urllib.request.Request(url, headers={"User-Agent": "PyxiSumo/0.1"})
+    req = urllib.request.Request(url, headers={"User-Agent": "PyxiSUMO/0.1"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode("utf-8")
     rows = list(csv.DictReader(io.StringIO(text)))

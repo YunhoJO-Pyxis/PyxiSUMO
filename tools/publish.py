@@ -363,7 +363,7 @@ def publish(repo: str, *, message: str, dry_run: bool = False,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="GitHub 에 올리기")
     ap.add_argument("--repo", required=True)
-    ap.add_argument("--message", default="PyxiSumo 갱신")
+    ap.add_argument("--message", default="PyxiSUMO 갱신")
     ap.add_argument("--dry-run", action="store_true",
                     help="검사만 하고 올리지는 않는다")
     ap.add_argument("--fix-nested", action="store_true",

@@ -105,7 +105,7 @@ def read_env() -> dict[str, str]:
 
 def write_env(values: dict[str, str]) -> None:
     lines = [
-        "# PyxiSumo 설정 파일",
+        "# PyxiSUMO 설정 파일",
         "# 이 파일에는 데이터베이스 비밀번호가 들어 있습니다.",
         "# 다른 사람에게 보내거나 GitHub 에 올리지 마세요.",
         "",
@@ -323,7 +323,7 @@ def test_connection(dsn: str) -> bool:
 #  명령
 # ---------------------------------------------------------------------
 def cmd_install() -> int:
-    title("PyxiSumo 설치")
+    title("PyxiSUMO 설치")
     say("스모 데이터를 받아 저장할 준비를 합니다.")
     say("중간에 창을 닫아도 괜찮습니다 — 다시 실행하면 이어서 진행됩니다.")
 
@@ -486,7 +486,7 @@ def cmd_publish() -> int:
         say("아직 없다면 github.com 에서 새 저장소(New repository)를 만들어 주세요.")
         say()
         say("저장소 주소를 붙여 넣어 주세요.")
-        say("  예) https://github.com/hong/PyxiSumo")
+        say("  예) https://github.com/hong/PyxiSUMO")
         say()
         repo = ask("저장소 주소")
         if not repo.strip():

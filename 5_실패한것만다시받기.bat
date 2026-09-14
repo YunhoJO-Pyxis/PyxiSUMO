@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>nul
-title PyxiSumo
+title PyxiSUMO
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
   echo.

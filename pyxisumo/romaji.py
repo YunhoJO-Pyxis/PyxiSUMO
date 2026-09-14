@@ -106,6 +106,25 @@ def _normalize(s: str) -> str:
     return t
 
 
+def shikona_only(name: str | None) -> str:
+    """시코나(四股名)만 남기고 본명을 뗀다.
+
+    Sumo-API 의 이름은 일정하지 않다. 'Hoshoryu' 처럼 시코나만 오기도 하고
+    'Terunofuji Haruo' 처럼 본명까지 붙어 오기도 한다. 그대로 두면 반즈케 표에
+    '테루노후지 하루오' 와 '호쇼류' 가 섞여 나온다.
+
+    반즈케에 적히는 것은 시코나뿐이므로 첫 낱말만 쓴다.
+    일본어 표기는 전각 공백('照ノ富士　春雄')으로 갈라져 있어 그것도 본다.
+    """
+    t = str(name or "").strip()
+    if not t:
+        return ""
+    for sep in ("\u3000", " "):
+        if sep in t:
+            return t.split(sep)[0].strip()
+    return t
+
+
 def to_hangul(romaji: str | None) -> str:
     """'Hoshoryu' → '호쇼류'. 해석하지 못한 글자는 그대로 남긴다."""
     if not romaji:

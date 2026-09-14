@@ -340,6 +340,33 @@ td.name a:hover { text-decoration: underline; }
 .note strong { color: var(--ink); }
 .note :last-child { margin-bottom: 0; }
 
+/* ── 기초 지식 ──────────────────────── */
+.g-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 34px; }
+.g-sec { margin: 0 0 40px; scroll-margin-top: 20px; }
+.g-sec h2 {
+  font-family: var(--f-display); font-weight: 700; font-size: 1.28rem;
+  margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule);
+}
+.g-table td:first-child { font-weight: 600; white-space: nowrap; }
+.g-table td:nth-child(2) { font-family: var(--f-display); color: var(--ink-3); }
+.g-foot { font-size: .8rem; color: var(--ink-3); margin: -16px 0 26px; }
+.g-dl { margin: 0 0 18px; }
+.g-dl dt {
+  font-weight: 600; margin-top: 16px;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.g-dl dt:first-child { margin-top: 0; }
+.g-dl dd {
+  margin: 4px 0 0; padding-left: 13px;
+  border-left: 2px solid var(--rule); color: var(--ink-2); max-width: 68ch;
+}
+.g-ja {
+  font-family: var(--f-display); font-weight: 400;
+  font-size: .84rem; color: var(--ink-3);
+}
+.g-src { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: .9rem; }
+.g-src li { margin-bottom: 5px; }
+
 /* ── 꼬리말 ─────────────────────────── */
 .site-foot {
   border-top: 1px solid var(--rule); background: var(--surface);

@@ -28,12 +28,102 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from ..romaji import shikona_only
 from ..sqlrunner import Runner, SqlError
 from . import queries as Q
+from .guide import SECTIONS as GUIDE_SECTIONS
+from .guide import SOURCES as GUIDE_SOURCES
 from .theme import CSS, SEARCH_JS
 
-SITE_NAME = "PyxiSumo"
+SITE_NAME = "PyxiSUMO"
 SITE_TAGLINE = "스모의 나침반"
+
+# ---------------------------------------------------------------------
+#  방문 통계 (선택)
+# ---------------------------------------------------------------------
+#  정적 사이트에는 서버가 없어 접속 기록이 남지 않는다. 보고 싶으면 방문자
+#  브라우저가 집계 서비스에 한 줄을 보내 주어야 한다.
+#
+#  쿠키를 심지 않고 개인을 식별하지 않는 두 곳만 지원한다. 아무것도 지정하지
+#  않으면 **집계 코드가 아예 들어가지 않는다** — 기본이 '추적 없음'이어야 한다.
+#
+#      PYXISUMO_ANALYTICS=goatcounter:내코드
+#      PYXISUMO_ANALYTICS=cloudflare:토큰
+ANALYTICS_HOSTS = {
+    # 제공자: (스크립트 호스트, 집계를 받는 호스트)
+    "goatcounter": ("https://gc.zgo.at", None),
+    "cloudflare": ("https://static.cloudflareinsights.com",
+                   "https://cloudflareinsights.com"),
+}
+
+# 페이지 뼈대가 참고하는 설정. build_site() 가 채운다.
+SITE_OPTS: dict[str, Any] = {"analytics": ""}
+
+
+def analytics_parts(spec: str) -> tuple[str, list[str], list[str]]:
+    """집계 설정을 (스크립트 HTML, script-src 호스트, connect-src 호스트) 로.
+
+    모르는 제공자는 조용히 무시한다 — 오타 하나로 사이트 생성이 멈추는 것보다
+    통계가 안 잡히는 편이 낫다 (생성 로그에는 남긴다).
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        return "", [], []
+    provider, _, value = spec.partition(":")
+    provider = provider.strip().lower()
+    value = value.strip()
+    if provider not in ANALYTICS_HOSTS or not value:
+        print(f"  (알 수 없는 통계 설정 '{spec}' — 집계 코드를 넣지 않습니다)")
+        return "", [], []
+
+    if provider == "goatcounter":
+        # 코드에는 영문·숫자·하이픈만 올 수 있다. 그대로 URL 에 넣으면 안 된다.
+        code = "".join(c for c in value if c.isalnum() or c == "-")
+        if not code:
+            return "", [], []
+        endpoint = f"https://{code}.goatcounter.com/count"
+        html_ = (f'<script data-goatcounter="{e(endpoint)}" async '
+                 f'src="https://gc.zgo.at/count.js"></script>')
+        return html_, ["https://gc.zgo.at"], [f"https://{code}.goatcounter.com"]
+
+    token = "".join(c for c in value if c.isalnum())
+    html_ = ('<script defer src="https://static.cloudflareinsights.com/beacon.min.js" '
+             f"data-cf-beacon='{{\"token\": \"{token}\"}}'></script>")
+    return html_, ["https://static.cloudflareinsights.com"], ["https://cloudflareinsights.com"]
+
+
+def csp_value(script_hosts: Sequence[str], connect_hosts: Sequence[str]) -> str:
+    """콘텐츠 보안 정책.
+
+    기본을 'none' 으로 두고 필요한 것만 연다. 만에 하나 DB 값에 섞인 태그가
+    페이지에 새어 나가더라도, 바깥으로 자료를 보내는 코드는 브라우저가 막는다.
+    (style 의 'unsafe-inline' 은 확신도 막대 같은 style="" 속성 때문이다.
+     인라인 <script> 는 쓰지 않으므로 script 쪽은 열어 두지 않는다.)
+    """
+    script = " ".join(["'self'", *script_hosts])
+    connect = " ".join(["'self'", *connect_hosts])
+    return "; ".join([
+        "default-src 'none'",
+        "base-uri 'self'",
+        "form-action 'none'",
+        "img-src 'self' data:",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src https://fonts.gstatic.com",
+        f"script-src {script}",
+        f"connect-src {connect}",
+    ])
+
+
+ROBOTS_TXT = """# PyxiSUMO
+# 사람이 보는 페이지는 모두 공개입니다. 검색 로봇도 환영합니다.
+# 다만 자료 파일을 통째로 긁어가는 것은 서버(=GitHub) 에만 부담이 되므로 막습니다.
+User-agent: *
+Allow: /
+Disallow: /rikishi/search-index.json
+
+# 예의 없이 몰아치는 수집기에는 간격을 요청합니다 (강제력은 없습니다).
+Crawl-delay: 5
+"""
 
 RANK_KO = {
     "Yokozuna": "요코즈나", "Ozeki": "오제키", "Sekiwake": "세키와케",
@@ -182,6 +272,7 @@ NAV = [
     ("rikishi", "선수 검색", "rikishi/index.html"),
     ("heya", "헤야", "heya/index.html"),
     ("banzuke", "지난 대회", "banzuke/index.html"),
+    ("guide", "스모 기초 지식", "guide.html"),
 ]
 
 
@@ -197,11 +288,15 @@ def page(
         for key, label, href in NAV
     )
     desc = description or f"{SITE_NAME} — 일본 스모 반즈케와 예측"
+    tag, s_hosts, c_hosts = analytics_parts(SITE_OPTS.get("analytics", ""))
+    csp = csp_value(s_hosts, c_hosts)
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{e(csp)}">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>{e(title)} · {SITE_NAME}</title>
 <meta name="description" content="{e(desc)}">
 <meta property="og:title" content="{e(title)} · {SITE_NAME}">
@@ -223,10 +318,11 @@ def page(
 <footer class="site-foot"><div class="wrap">
   <p>성적·반즈케 데이터 출처: <a href="https://www.sumo-api.com/">Sumo-API</a>.
      대전 결과와 서열은 사실 정보이며, 이 사이트는 그것을 구조화해 제공합니다.</p>
-  <p>예측은 공식 발표가 아닙니다. 반즈케는 일본상撲협회 심판부가 편성하며,
+  <p>예측은 공식 발표가 아닙니다. 반즈케는 일본스모협회(日本相撲協会) 심판부가 편성하며,
      매수 변동의 대부분은 성문 규정이 아닌 관례입니다.</p>
   <p>{e(generated)}</p>
 </div></footer>
+{tag}
 </body>
 </html>
 """
@@ -261,7 +357,10 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
         if not d:
             return f'<div class="{cls} empty" data-side="{label}"></div>'
         link = f'{up}rikishi/{e(d["id"])}.html'
-        ja = f'<div class="bz-ja">{e(d["ja"])}</div>' if d.get("ja") else ""
+        # 반즈케에 적히는 것은 시코나뿐이다. API 가 '照ノ富士　春雄' 처럼
+        # 본명까지 주는 경우가 있어, 표에서는 앞부분만 보인다.
+        ja = (f'<div class="bz-ja">{e(shikona_only(d["ja"]))}</div>'
+              if d.get("ja") else "")
         heya = f'<div class="bz-heya">{e(d["heya"])}</div>' if d.get("heya") else ""
         return (
             f'<div class="{cls}" data-side="{label}">'
@@ -311,8 +410,8 @@ def build_index(rn: Runner, out: Path, basho: Sequence, gen: str) -> None:
     body = f"""
 <div class="page-head">
   <p class="eyebrow">{e(basho_label(bid))} · {e(venue or "")}</p>
-  <h1>{e(name)} 반즈케{pill}</h1>
-  <p class="sub">{e(when)} · {e(name_ja or "")} · 총 {i(n_entries)}명</p>
+  <h1>{e(with_ja(name, name_ja))} 반즈케{pill}</h1>
+  <p class="sub">{e(when)} · 총 {i(n_entries)}명</p>
 </div>
 <main>
 {banzuke_table(rows)}
@@ -342,8 +441,8 @@ def build_banzuke_pages(rn: Runner, out: Path, basho: Sequence, gen: str) -> Non
         bid, name, name_ja, venue, start, end, status, n, played = b[:9]
         cards.append(
             f'<a class="card" href="{e(bid)}.html">'
-            f'<div class="t">{e(basho_label(bid))} {e(name)}</div>'
-            f'<div class="ja">{e(name_ja or "")} · {e(venue or "")}</div>'
+            f'<div class="t">{e(basho_label(bid))} {e(with_ja(name, name_ja))}</div>'
+            f'<div class="ja">{e(venue or "")}</div>'
             f'<div class="m">{i(n)}명 · '
             f'<span class="status-pill st-{e(status)}">'
             f'{e(STATUS_KO.get(status, status))}</span></div></a>'
@@ -368,7 +467,7 @@ def build_banzuke_pages(rn: Runner, out: Path, basho: Sequence, gen: str) -> Non
         pbody = f"""
 <div class="page-head">
   <p class="eyebrow"><a href="index.html">지난 대회</a> · {e(venue or "")}</p>
-  <h1>{e(basho_label(bid))} {e(name)}{pill}</h1>
+  <h1>{e(basho_label(bid))} {e(with_ja(name, name_ja))}{pill}</h1>
   <p class="sub">{e(start or "")} ~ {e(end or "")} · {i(n)}명</p>
 </div>
 <main>{banzuke_table(rows, depth=1)}</main>
@@ -469,7 +568,7 @@ def build_yosou(rn: Runner, out: Path, gen: str) -> None:
             + (f'<div class="basis">{e(basis_ko)}</div>' if basis_ko else "")
             + '</td>'
             f'<td class="name"><a href="rikishi/{e(rid)}.html">{e(name)}</a>'
-            f'<div class="bz-ja">{e(name_ja or "")}</div></td>'
+            f'<div class="bz-ja">{e(shikona_only(name_ja))}</div></td>'
             + heya_cell(heya, heya_ja) +
             act_html +
             f'<td class="num">{e(rank_ko(pkind, pnum, pside, pdiv) or "—")}</td>'
@@ -651,7 +750,7 @@ def build_rikishi(rn: Runner, out: Path, gen: str) -> int:
             encoding="utf-8")
 
         index.append({
-            "i": rid, "n": name, "j": name_ja or "", "e": name_en or "",
+            "i": rid, "n": name, "j": shikona_only(name_ja), "e": name_en or "",
             "k": name_kana or "", "h": heya or "", "r": best_label or "",
             # 은퇴 여부. 현역과 섞여 나오면 지금 뛰는 선수인 줄 알게 된다.
             "x": 1 if retired else 0,
@@ -753,10 +852,89 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
     return len(rows)
 
 
+def build_guide(out: Path, gen: str) -> int:
+    """스모 기초 지식 — DB 를 보지 않는 유일한 페이지.
+
+    내용은 guide.py 에 있다. 여기서는 블록을 HTML 로 옮기기만 한다.
+    글에도 사용자 입력은 없지만 e() 를 그대로 통과시킨다 — 예외를 만들면
+    나중에 누가 DB 값을 여기에 끼워 넣었을 때 그 구멍이 조용히 열린다.
+    """
+    def render(kind: str, data: Any) -> str:
+        if kind == "p":
+            return f"<p>{e(data)}</p>"
+        if kind == "note":
+            return f'<div class="note"><p>{e(data)}</p></div>'
+        if kind == "table":
+            head = "".join(f"<th>{e(h)}</th>" for h in data["head"])
+            rows = "".join(
+                "<tr>" + "".join(f"<td>{e(c)}</td>" for c in r) + "</tr>"
+                for r in data["rows"]
+            )
+            foot = (f'<p class="g-foot">{e(data["foot"])}</p>'
+                    if data.get("foot") else "")
+            return (f'<div class="table-scroll"><table class="g-table">'
+                    f"<thead><tr>{head}</tr></thead><tbody>{rows}</tbody>"
+                    f"</table></div>{foot}")
+        if kind == "dl":
+            items = "".join(
+                f"<dt>{e(ko)}"
+                + (f'<span class="g-ja">{e(ja)}</span>' if ja and ja != "—" else "")
+                + f"</dt><dd>{e(desc)}</dd>"
+                for ko, ja, desc in data
+            )
+            return f'<dl class="g-dl">{items}</dl>'
+        raise ValueError(f"알 수 없는 블록 종류: {kind}")
+
+    toc = "".join(
+        f'<a class="chip" href="#{e(s["id"])}">{e(s["title"])}</a>'
+        for s in GUIDE_SECTIONS
+    )
+    parts = []
+    for s in GUIDE_SECTIONS:
+        inner = "".join(render(k, d) for k, d in s["blocks"])
+        parts.append(
+            f'<section class="g-sec" id="{e(s["id"])}">'
+            f'<h2>{e(s["title"])}</h2>{inner}</section>'
+        )
+    srcs = "".join(
+        f'<li><a href="{e(u)}" target="_blank" rel="noopener">{e(t)}</a></li>'
+        for t, u in GUIDE_SOURCES
+    )
+
+    body = f"""
+<div class="page-head">
+  <p class="eyebrow">처음 보는 사람을 위한 안내</p>
+  <h1>스모 기초 지식</h1>
+  <p class="sub">마쿠우치·마에가시라·쥬료가 무엇인지, 이 사이트의 표를 읽는 데
+     필요한 만큼만 정리했습니다.</p>
+</div>
+<main>
+<nav class="g-toc" aria-label="목차">{toc}</nav>
+{"".join(parts)}
+<section class="g-sec" id="sources">
+  <h2>출처</h2>
+  <p>정원과 내규는 아래 자료를 확인하고 적었습니다. 정원은 바뀌는 일이
+     있으므로 본문에 '언제부터'를 함께 적어 두었습니다.</p>
+  <ul class="g-src">{srcs}</ul>
+</section>
+</main>
+"""
+    (out / "guide.html").write_text(
+        page(title="스모 기초 지식", body=body, current="guide", generated=gen,
+             description="마쿠우치·쥬료·마에가시라 등 스모 반즈케를 읽는 데 "
+                         "필요한 기본 용어 정리"),
+        encoding="utf-8")
+    return len(GUIDE_SECTIONS)
+
+
 # ---------------------------------------------------------------------
 #  진입점
 # ---------------------------------------------------------------------
-def build_site(dsn: str, outdir: str | Path, *, quiet: bool = False) -> dict[str, int]:
+def build_site(dsn: str, outdir: str | Path, *, quiet: bool = False,
+               analytics: str | None = None) -> dict[str, int]:
+    SITE_OPTS["analytics"] = (
+        analytics if analytics is not None
+        else os.environ.get("PYXISUMO_ANALYTICS", ""))
     out = Path(outdir)
     if out.exists():
         for child in out.iterdir():
@@ -781,6 +959,7 @@ def build_site(dsn: str, outdir: str | Path, *, quiet: bool = False) -> dict[str
     (assets / "search.js").write_text(SEARCH_JS, encoding="utf-8")
     # GitHub Pages 가 Jekyll 로 처리하지 않도록
     (out / ".nojekyll").write_text("", encoding="utf-8")
+    (out / "robots.txt").write_text(ROBOTS_TXT, encoding="utf-8")
 
     stats = {"basho": len(basho)}
     build_index(rn, out, basho, gen)
@@ -788,6 +967,7 @@ def build_site(dsn: str, outdir: str | Path, *, quiet: bool = False) -> dict[str
     build_yosou(rn, out, gen)
     stats["rikishi"] = build_rikishi(rn, out, gen)
     stats["heya"] = build_heya(rn, out, gen)
+    build_guide(out, gen)
     stats["files"] = sum(1 for _ in out.rglob("*") if _.is_file())
 
     if not quiet:
@@ -801,13 +981,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="docs",
                     help="출력 폴더 (GitHub Pages 는 docs 를 씁니다)")
     ap.add_argument("--dsn", default=os.environ.get("DATABASE_URL"))
+    ap.add_argument("--analytics", default=None,
+                    help="방문 통계 (예: goatcounter:내코드). 비워 두면 넣지 않습니다")
     args = ap.parse_args(argv)
 
     if not args.dsn:
         print("DATABASE_URL 이 없습니다.", file=sys.stderr)
         return 2
     try:
-        build_site(args.dsn, args.out)
+        build_site(args.dsn, args.out, analytics=args.analytics)
     except SqlError as e_:
         print(f"오류: {e_}", file=sys.stderr)
         return 1

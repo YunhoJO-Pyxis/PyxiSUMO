@@ -42,11 +42,14 @@ ON CONFLICT (slug) DO UPDATE
       name_ja = EXCLUDED.name_ja,
       name_ko = EXCLUDED.name_ko;
 
-INSERT INTO rikishi (id) VALUES (990001), (990002)
+INSERT INTO rikishi (id) VALUES (990001), (990002), (990003), (990004), (990005)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO shikona (rikishi_id, from_basho, name_en, name_ja, name_ko) VALUES
   (990001, '202601', 'Hoshoryu', '豊昇龍', NULL),
+  (990003, '202601', 'Terunofuji Haruo', '照ノ富士　春雄', NULL),
+  (990004, '202601', 'Ichinojo Takashi', NULL, '이치노조 타카시'),
+  (990005, '202601', 'Aoiyama Kosuke', NULL, '내가 고친 아오이야마'),
   (990002, '202601', 'Kotozakura', '琴櫻', '내가 고친 코토자쿠라')
 ON CONFLICT (rikishi_id, from_basho) DO UPDATE
   SET name_en = EXCLUDED.name_en,
@@ -57,8 +60,8 @@ COMMIT;
 """
 
 CLEANUP = """
-DELETE FROM shikona WHERE rikishi_id IN (990001, 990002);
-DELETE FROM rikishi WHERE id IN (990001, 990002);
+DELETE FROM shikona WHERE rikishi_id IN (990001, 990002, 990003, 990004, 990005);
+DELETE FROM rikishi WHERE id IN (990001, 990002, 990003, 990004, 990005);
 DELETE FROM heya WHERE slug LIKE 't\\_%';
 """
 
@@ -107,10 +110,23 @@ def main() -> int:
         check("사람이 넣은 시코나 표기는 그대로",
               s2 and s2[0] == "내가 고친 코토자쿠라", str(s2))
 
+        s3 = one(rn, "SELECT name_ko FROM shikona WHERE rikishi_id=990003")
+        check("본명이 붙은 이름은 시코나만 남김",
+              s3 and s3[0] == "테루노후지", str(s3))
+
+        s4 = one(rn, "SELECT name_ko FROM shikona WHERE rikishi_id=990004")
+        check("예전에 본명까지 넣어 둔 값도 고쳐짐",
+              s4 and s4[0] == "이치노조", str(s4))
+
+        s5 = one(rn, "SELECT name_ko FROM shikona WHERE rikishi_id=990005")
+        check("사람이 고친 이름은 안 건드림",
+              s5 and s5[0] == "내가 고친 아오이야마", str(s5))
+
         # 멱등성 — 두 번째 실행은 아무것도 바꾸지 않아야 한다
         st2 = fill(rn, verbose=False)
         check("두 번째 실행은 변경 없음",
-              st2["shikona_ko"] == 0 and st2["heya_ko"] == 0 and st2["heya_ja"] == 0,
+              st2["shikona_ko"] == 0 and st2["heya_ko"] == 0
+              and st2["heya_ja"] == 0 and st2["shikona_fixed"] == 0,
               str(st2))
 
         # 전체 DB에 영문만 남은 표시가 없는지

@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul 2>nul
-title PyxiSumo - Install
+title PyxiSUMO - Install
 cd /d "%~dp0"
 
 echo.
-echo   PyxiSumo installer starting...
+echo   PyxiSUMO installer starting...
 echo.
 
 set "PYEXE="

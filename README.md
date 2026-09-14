@@ -1,4 +1,4 @@
-# PyxiSumo — Phase 0
+# PyxiSUMO — Phase 0
 
 스모 반즈케 인사이트의 데이터 기반. **PostgreSQL 스키마 + 수집 배치 + 반즈케 예측 엔진**.
 

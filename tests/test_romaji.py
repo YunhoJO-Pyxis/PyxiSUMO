@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import unittest
 
-from pyxisumo.heya_names import japanese_for, normalize
-from pyxisumo.romaji import to_hangul
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from pyxisumo.heya_names import japanese_for, normalize   # noqa: E402
+from pyxisumo.romaji import shikona_only, to_hangul       # noqa: E402
 
 # 목업에 실제로 등장한 이름들
 MOCKUP = {
@@ -126,6 +130,30 @@ class TestRomaji(unittest.TestCase):
                 out = to_hangul(name)
                 self.assertFalse(any("a" <= c.lower() <= "z" for c in out),
                                  f"{name} → {out} 에 로마자가 남음")
+
+
+class TestShikonaOnly(unittest.TestCase):
+    """API 는 이름을 일정하게 주지 않는다 — 시코나만 남겨야 표가 고르다."""
+
+    def test_drops_given_name(self):
+        self.assertEqual(shikona_only("Terunofuji Haruo"), "Terunofuji")
+        self.assertEqual(shikona_only("Takakeisho Takanobu"), "Takakeisho")
+
+    def test_full_width_space(self):
+        self.assertEqual(shikona_only("照ノ富士\u3000春雄"), "照ノ富士")
+        self.assertEqual(shikona_only("大の里\u3000泰輝"), "大の里")
+
+    def test_leaves_single_name_alone(self):
+        for n in ("Hoshoryu", "豊昇龍", "宇良", "Ura"):
+            self.assertEqual(shikona_only(n), n)
+
+    def test_empty(self):
+        for v in (None, "", "   "):
+            self.assertEqual(shikona_only(v), "")
+
+    def test_transliterates_shikona_only(self):
+        self.assertEqual(to_hangul(shikona_only("Terunofuji Haruo")), "테루노후지")
+        self.assertEqual(to_hangul(shikona_only("Hoshoryu")), "호쇼류")
 
 
 class TestHeyaNames(unittest.TestCase):

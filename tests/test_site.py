@@ -8,8 +8,11 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from pyxisumo.ranks import DIVISION_CAPACITY          # noqa: E402
+from pyxisumo.site import guide as G                  # noqa: E402
 from pyxisumo.site.build import (  # noqa: E402
-    banzuke_table, basho_label, e, rank_ko, rec_txt, with_ja,
+    analytics_parts, banzuke_table, basho_label, csp_value, e, rank_ko,
+    rec_txt, with_ja,
 )
 
 
@@ -154,6 +157,121 @@ class TestWithJa(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(with_ja(None, None), "")
+
+
+class TestGuideContent(unittest.TestCase):
+    """설명 페이지는 사실을 주장한다 — 그래서 검사한다.
+
+    사람이 쓴 글이라 테스트가 어색해 보이지만, 여기에 적힌 정원은 예측
+    엔진이 쓰는 숫자와 같아야 한다. 둘이 어긋나면 사이트가 자기 자신과
+    다른 말을 하게 된다.
+    """
+
+    def rows_as_dict(self):
+        # [한국어, 일본어, 정원, 구분, 설명]
+        return {r[1]: r[2] for r in G.DIVISION_ROWS}
+
+    def test_capacity_matches_engine(self):
+        cap = self.rows_as_dict()
+        self.assertEqual(cap["幕内"], f"{DIVISION_CAPACITY['Makuuchi']}명")
+        self.assertEqual(cap["十両"], f"{DIVISION_CAPACITY['Juryo']}명")
+        self.assertEqual(cap["幕下"], f"{DIVISION_CAPACITY['Makushita']}명")
+
+    def test_divisions_are_in_order(self):
+        self.assertEqual([r[0] for r in G.DIVISION_ROWS],
+                         ["마쿠우치", "쥬료", "마쿠시타", "산단메",
+                          "조니단", "조노쿠치"])
+
+    def test_sekitori_marked_only_on_top_two(self):
+        marked = [r[0] for r in G.DIVISION_ROWS if r[3] == "세키토리"]
+        self.assertEqual(marked, ["마쿠우치", "쥬료"])
+
+    def test_six_basho(self):
+        self.assertEqual(len(G.BASHO_ROWS), 6)
+        self.assertEqual([r[0] for r in G.BASHO_ROWS],
+                         ["1월", "3월", "5월", "7월", "9월", "11월"])
+
+    def test_no_html_in_text(self):
+        """guide.py 는 글만 담는다. 태그를 적으면 화면에 태그가 보인다."""
+        def walk(v):
+            if isinstance(v, str):
+                self.assertNotIn("<", v, f"태그로 보이는 글자: {v[:40]}")
+            elif isinstance(v, dict):
+                for x in v.values():
+                    walk(x)
+            elif isinstance(v, (list, tuple)):
+                for x in v:
+                    walk(x)
+        walk(G.SECTIONS)
+
+    def test_section_ids_are_unique_and_url_safe(self):
+        ids = [s["id"] for s in G.SECTIONS]
+        self.assertEqual(len(ids), len(set(ids)))
+        for i_ in ids:
+            self.assertRegex(i_, r"^[a-z0-9-]+$")
+
+    def test_known_block_kinds(self):
+        for s in G.SECTIONS:
+            for kind, _ in s["blocks"]:
+                self.assertIn(kind, ("p", "note", "table", "dl"))
+
+    def test_tables_are_rectangular(self):
+        for s in G.SECTIONS:
+            for kind, data in s["blocks"]:
+                if kind == "table":
+                    n = len(data["head"])
+                    for r in data["rows"]:
+                        self.assertEqual(len(r), n, f"{s['id']}: 칸 수가 다름")
+
+    def test_sources_are_https(self):
+        self.assertTrue(G.SOURCES)
+        for _, url in G.SOURCES:
+            self.assertTrue(url.startswith("https://"), url)
+
+
+class TestAnalytics(unittest.TestCase):
+    """기본은 '추적 없음' 이어야 한다."""
+
+    def test_off_by_default(self):
+        self.assertEqual(analytics_parts(""), ("", [], []))
+        self.assertEqual(analytics_parts("   "), ("", [], []))
+
+    def test_unknown_provider_is_ignored(self):
+        self.assertEqual(analytics_parts("google:UA-1")[0], "")
+        self.assertEqual(analytics_parts("goatcounter:")[0], "")
+
+    def test_goatcounter(self):
+        tag, s, c = analytics_parts("goatcounter:pyxisumo")
+        self.assertIn("https://pyxisumo.goatcounter.com/count", tag)
+        self.assertIn("https://gc.zgo.at", s)
+        self.assertIn("https://pyxisumo.goatcounter.com", c)
+
+    def test_code_cannot_break_out_of_the_url(self):
+        """코드 칸에 이상한 글자가 들어와도 URL 이 바뀌면 안 된다."""
+        tag, _, _ = analytics_parts('goatcounter:ab"/><script>x</script>')
+        self.assertNotIn("<script>x", tag)
+        self.assertIn("https://abscriptxscript.goatcounter.com/count", tag)
+
+    def test_cloudflare_token_is_alnum_only(self):
+        tag, _, _ = analytics_parts("cloudflare:abc123\"/>")
+        self.assertIn('"token": "abc123"', tag)
+
+
+class TestCsp(unittest.TestCase):
+    def test_locked_down_by_default(self):
+        v = csp_value([], [])
+        self.assertIn("default-src 'none'", v)
+        self.assertIn("script-src 'self'", v)
+        self.assertIn("connect-src 'self'", v)
+        self.assertNotIn("unsafe-eval", v)
+        # 인라인 <script> 는 쓰지 않는다 — 열어 두면 XSS 방어가 무너진다
+        self.assertNotIn("script-src 'self' 'unsafe-inline'", v)
+
+    def test_analytics_host_is_allowed_when_enabled(self):
+        _, s, c = analytics_parts("goatcounter:pyxisumo")
+        v = csp_value(s, c)
+        self.assertIn("script-src 'self' https://gc.zgo.at", v)
+        self.assertIn("https://pyxisumo.goatcounter.com", v)
 
 
 if __name__ == "__main__":

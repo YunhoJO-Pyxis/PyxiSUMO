@@ -29,7 +29,7 @@ from typing import Any, Iterator
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.sumo-api.com/api"
-USER_AGENT = "PyxiSumo/0.1 (+https://example.invalid; contact: you@example.com)"
+USER_AGENT = "PyxiSUMO/0.1 (+https://example.invalid; contact: you@example.com)"
 
 DIVISION_PARAM = {
     "Makuuchi": "Makuuchi",

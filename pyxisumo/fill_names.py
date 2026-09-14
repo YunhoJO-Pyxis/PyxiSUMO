@@ -30,7 +30,7 @@ import sys
 from typing import Any, Callable, Iterable, Sequence
 
 from .heya_names import japanese_for, romaji_for_ja
-from .romaji import to_hangul
+from .romaji import shikona_only, to_hangul
 from .sqlrunner import Runner, SqlError
 
 log = logging.getLogger("fill_names")
@@ -42,6 +42,13 @@ FETCH_SHIKONA = """
 SELECT id, name_en
 FROM shikona
 WHERE name_ko IS NULL AND name_en IS NOT NULL AND name_en <> ''
+"""
+
+# 이름에 공백이 있는 것 = 본명이 붙어 있을 수 있는 것
+FETCH_SPACED = """
+SELECT id, name_en, name_ko
+FROM shikona
+WHERE name_ko LIKE '% %' AND name_en IS NOT NULL AND name_en <> ''
 """
 
 FETCH_HEYA = """
@@ -80,6 +87,28 @@ def _bulk_update(runner: Runner, table: str, column: str,
     return done
 
 
+REPAIR = """
+UPDATE shikona AS t
+SET name_ko = v.val
+FROM (VALUES {values}) AS v(id, val)
+WHERE t.id = v.id::bigint
+"""
+
+
+def _bulk_repair(runner: Runner, pairs: Sequence[tuple[Any, str]]) -> int:
+    """이미 있는 값을 고쳐 쓴다 (IS NULL 조건 없이)."""
+    done = 0
+    for i in range(0, len(pairs), CHUNK):
+        part = pairs[i:i + CHUNK]
+        values = ", ".join(["(%s, %s)"] * len(part))
+        params: list[Any] = []
+        for pid, val in part:
+            params.extend([pid, val])
+        runner.execute(REPAIR.format(values=values), params)
+        done += len(part)
+    return done
+
+
 def fill(runner: Runner, *, verbose: bool = True,
          on_progress: Callable[[str, int, int], None] | None = None
          ) -> dict[str, int]:
@@ -88,7 +117,8 @@ def fill(runner: Runner, *, verbose: bool = True,
     on_progress(단계, 끝난 수, 전체 수) 로 진행 상황을 알린다 — 수천 건이
     도는 동안 화면이 멈춘 것처럼 보이지 않게 하기 위한 것이다.
     """
-    stats = {"shikona_ko": 0, "heya_ko": 0, "heya_ja": 0, "heya_unknown": 0}
+    stats = {"shikona_ko": 0, "shikona_fixed": 0,
+             "heya_ko": 0, "heya_ja": 0, "heya_unknown": 0}
 
     def report(stage: str, done: int, total: int) -> None:
         if on_progress:
@@ -96,12 +126,27 @@ def fill(runner: Runner, *, verbose: bool = True,
 
     # --- 시코나 ---------------------------------------------------------
     rows = runner.query(FETCH_SHIKONA)
-    pairs = [(sid, ko) for sid, name_en in rows if (ko := to_hangul(name_en))]
+    pairs = [(sid, ko) for sid, name_en in rows
+             if (ko := to_hangul(shikona_only(name_en)))]
     report("시코나", 0, len(pairs))
     if pairs:
         stats["shikona_ko"] = _bulk_update(
             runner, "shikona", "name_ko", pairs,
             lambda n: report("시코나", n, len(pairs)))
+
+    # --- 이미 넣어 둔 값 중 본명이 붙은 것 고치기 -----------------------
+    #  예전 판은 'Terunofuji Haruo' 를 통째로 옮겨 '테루노후지 하루오' 로 넣었다.
+    #  **기계가 넣은 값일 때만** 고친다 — 사람이 손으로 고친 이름은 건드리지 않는다.
+    #  (옛 규칙으로 만든 값과 정확히 같을 때만 기계가 넣은 것으로 본다)
+    fix: list[tuple[Any, str]] = []
+    for sid, name_en, old in runner.query(FETCH_SPACED):
+        if old != to_hangul(name_en):          # 사람이 고친 값 — 그대로 둔다
+            continue
+        new = to_hangul(shikona_only(name_en))
+        if new and new != old:
+            fix.append((sid, new))
+    if fix:
+        stats["shikona_fixed"] = _bulk_repair(runner, fix)
 
     # --- 헤야 -----------------------------------------------------------
     ko_pairs: list[tuple[Any, str]] = []
@@ -128,8 +173,9 @@ def fill(runner: Runner, *, verbose: bool = True,
     report("헤야", len(ko_pairs), len(ko_pairs))
 
     if verbose:
-        log.info("시코나 한국어 %d건 · 헤야 한국어 %d건 · 헤야 한자 %d건",
-                 stats["shikona_ko"], stats["heya_ko"], stats["heya_ja"])
+        log.info("시코나 한국어 %d건 (본명 정리 %d건) · 헤야 한국어 %d건 · 헤야 한자 %d건",
+                 stats["shikona_ko"], stats["shikona_fixed"],
+                 stats["heya_ko"], stats["heya_ja"])
         if unknown:
             log.info("한자를 모르는 헤야 %d곳 (한국어만 표시됩니다): %s",
                      len(unknown), ", ".join(sorted(set(unknown))[:12]))

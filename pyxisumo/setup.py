@@ -645,7 +645,7 @@ def cmd_names(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m pyxisumo.setup",
-        description="PyxiSumo 초기설정 자동화",
+        description="PyxiSUMO 초기설정 자동화",
     )
     ap.add_argument("command",
                     choices=["init", "doctor", "resume", "retry-failed",
@@ -669,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--yes", action="store_true")
     args = ap.parse_args(argv)
 
-    print("\033[1mPyxiSumo 초기설정\033[0m")
+    print("\033[1mPyxiSUMO 초기설정\033[0m")
 
     return {
         "init": cmd_init,

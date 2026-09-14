@@ -31,6 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # 방문 통계 (선택). 저장소 Settings → Secrets and variables → Actions →
+      # Variables 에 PYXISUMO_ANALYTICS 를 만들면 그때부터 집계 코드가 들어간다.
+      #   예) goatcounter:내코드
+      # 만들지 않으면 비어 있고, 아무것도 심지 않는다.
+      PYXISUMO_ANALYTICS: ${{ vars.PYXISUMO_ANALYTICS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

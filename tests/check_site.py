@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     for need in ("index.html", "yosou.html", "assets/style.css",
                  "assets/search.js", "rikishi/index.html",
                  "rikishi/search-index.json", "heya/index.html",
-                 "banzuke/index.html", ".nojekyll"):
+                 "banzuke/index.html", "guide.html", "robots.txt", ".nojekyll"):
         if not (root / need).exists():
             problems.append(f"필수 파일 없음: {need}")
 
