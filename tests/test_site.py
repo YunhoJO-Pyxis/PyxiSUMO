@@ -13,6 +13,7 @@ from pyxisumo import ichimon as I                     # noqa: E402
 from pyxisumo.heya_names import HEYA_JA, normalize     # noqa: E402
 from pyxisumo.ranks import DIVISION_CAPACITY          # noqa: E402
 from pyxisumo.site import guide as G                  # noqa: E402
+from pyxisumo.site.theme import CSS                    # noqa: E402
 from pyxisumo.site.build import (  # noqa: E402
     analytics_parts, banzuke_table, basho_label, csp_value, division_jump, e,
     rank_ko, rec_txt, with_ja,
@@ -172,35 +173,71 @@ class TestDivisionJump(unittest.TestCase):
          "엔도", "遠藤", "Endo", "", "오이와토", None),
     ]
 
-    def test_makes_a_button_per_division(self):
+    def test_makes_a_button_per_division_plus_all(self):
         h = division_jump(self.ROWS)
-        self.assertIn('href="#makuuchi"', h)
-        self.assertIn('href="#juryo"', h)
+        self.assertIn('data-filter="all"', h)
+        self.assertIn('data-filter="Makuuchi"', h)
+        self.assertIn('data-filter="Juryo"', h)
+        self.assertIn("전체", h)
         self.assertIn("마쿠우치", h)
         self.assertIn("쥬료", h)
 
-    def test_anchors_exist_in_the_table(self):
-        """단추가 가리키는 자리가 표 안에 실제로 있어야 한다.
+    def test_buttons_are_buttons_not_links(self):
+        """누르면 걸러 내는 단추다. <a> 로 만들면 자리로 뛰어가 버린다."""
+        h = division_jump(self.ROWS)
+        self.assertIn("<button", h)
+        self.assertNotIn("<a ", h)
 
-        여기가 어긋나면 눌러도 아무 일이 없어 고장으로 보인다.
+    def test_filter_values_exist_in_the_table(self):
+        """단추가 고르는 값이 표의 행에 실제로 붙어 있어야 한다.
+
+        여기가 어긋나면 눌러도 아무 일이 없거나 전부 사라져 고장으로 보인다.
         """
         table = banzuke_table(self.ROWS)
-        for anchor in re.findall(r'href="#([a-z]+)"', division_jump(self.ROWS)):
-            self.assertIn(f'id="{anchor}"', table, f"#{anchor} 자리가 없음")
+        for val in re.findall(r'data-filter="([^"]+)"', division_jump(self.ROWS)):
+            if val == "all":
+                continue
+            self.assertIn(f'data-division="{val}"', table, f"{val} 행이 없음")
 
-    def test_no_button_for_a_division_that_is_absent(self):
-        only_maku = [self.ROWS[0]]
-        h = division_jump(only_maku, extra=[("torikumi", "오늘의 대전")])
-        self.assertNotIn("juryo", h)
-        self.assertIn("오늘의 대전", h)
+    def test_bar_points_at_the_table(self):
+        h = division_jump(self.ROWS, target="banzuke")
+        self.assertIn('data-filter-for="#banzuke"', h)
+        self.assertIn('data-filter-attr="data-division"', h)
+        self.assertIn('id="banzuke"', banzuke_table(self.ROWS))
 
-    def test_single_target_makes_no_bar(self):
-        """단추가 하나뿐이면 줄을 만들지 않는다 — 누를 곳이 없는 막대는 군더더기."""
+    def test_every_row_is_tagged(self):
+        table = banzuke_table(self.ROWS)
+        self.assertEqual(table.count('class="bz-row"'),
+                         len(re.findall(r'class="bz-row" data-division=', table)))
+
+    def test_single_division_makes_no_bar(self):
+        """단이 하나뿐이면 줄을 만들지 않는다 — 고를 것이 없는 막대는 군더더기."""
         self.assertEqual(division_jump([self.ROWS[0]]), "")
 
-    def test_extra_links_come_first(self):
-        h = division_jump(self.ROWS, extra=[("torikumi", "오늘의 대전")])
-        self.assertLess(h.index("오늘의 대전"), h.index("마쿠우치"))
+    def test_all_comes_first_and_starts_on(self):
+        h = division_jump(self.ROWS)
+        self.assertLess(h.index("전체"), h.index("마쿠우치"))
+        self.assertIn('class="jump is-on" data-filter="all"', h)
+
+
+class TestHiddenIsActuallyHidden(unittest.TestCase):
+    """el.hidden 이 화면에서도 정말 사라지는가.
+
+    hidden 속성의 기본값은 display:none 이지만, 그 요소에 display 를 따로
+    지정해 두면(반즈케 행의 grid 처럼) 기본값이 밀려 **숨겨지지 않는다.**
+    실제로 그래서 단추를 눌러도 표가 그대로였다. CSS 한 줄이 빠지면
+    조용히 되돌아오는 버그라 여기서 묶어 둔다.
+    """
+
+    def test_css_forces_hidden(self):
+        import re as _re
+        self.assertTrue(
+            _re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", CSS),
+            "[hidden] { display: none !important } 규칙이 없습니다")
+
+    def test_filtered_elements_set_display_explicitly(self):
+        """이 규칙이 왜 필요한지 — 실제로 display 를 지정하고 있음을 보인다."""
+        self.assertRegex(CSS, r"\.bz-head,\s*\.bz-row\s*\{[^}]*display:\s*grid")
 
 
 class TestIchimon(unittest.TestCase):

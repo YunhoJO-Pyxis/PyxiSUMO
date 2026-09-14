@@ -335,29 +335,43 @@ def page(
 DIV_ANCHOR = {"Makuuchi": "makuuchi", "Juryo": "juryo", "Makushita": "makushita"}
 
 
-def division_jump(rows: Sequence[Sequence[Any]], extra: Sequence[tuple[str, str]] = ()) -> str:
-    """'마쿠우치 / 쥬료' 바로가기 단추.
+def division_jump(rows: Sequence[Sequence[Any]], target: str = "banzuke") -> str:
+    """'전체 / 마쿠우치 / 쥬료' 고르기 단추.
+
+    누르면 그 단만 남는다 (자리로 뛰어가는 것이 아니라 걸러 낸다).
+    헤야 페이지의 일문 단추와 같은 장치를 쓴다 — 같은 모양이면 한 번 익히면
+    어디서든 통한다.
 
     표에 실제로 들어 있는 단만 만든다. 쥬료가 없는 대회에 쥬료 단추를 두면
-    눌러도 아무 일이 안 일어나 고장처럼 보인다.
+    눌러도 빈 화면이 나와 고장처럼 보인다.
     """
     seen: list[str] = []
+    counts: dict[str, int] = {}
     for r in rows:
         div = str(r[1])
         if div not in seen:
             seen.append(div)
-    chips = [f'<a class="jump" href="#{e(a)}">{e(t)}</a>' for a, t in extra]
-    chips += [
-        f'<a class="jump" href="#{DIV_ANCHOR.get(d, d.lower())}">'
-        f'{e(DIV_KO.get(d, d))} <span>{e(DIV_JA.get(d, ""))}</span></a>'
-        for d in seen if d in DIV_ANCHOR
-    ]
-    if len(chips) < 2:
+        counts[div] = counts.get(div, 0) + 1
+
+    live = [d for d in seen if d in DIV_ANCHOR]
+    if len(live) < 2:
         return ""
-    return f'<nav class="jumpbar" aria-label="바로가기">{"".join(chips)}</nav>'
+
+    chips = [f'<button type="button" class="jump is-on" data-filter="all">'
+             f'전체 <span>{sum(counts[d] for d in live)}</span></button>']
+    chips += [
+        f'<button type="button" class="jump" data-filter="{e(d)}">'
+        f'{e(DIV_KO.get(d, d))} <span>{e(DIV_JA.get(d, ""))} {counts[d]}</span>'
+        f"</button>"
+        for d in live
+    ]
+    return (f'<nav class="jumpbar" aria-label="단 고르기"'
+            f' data-filter-for="#{e(target)}" data-filter-attr="data-division"'
+            f' data-hash-prefix="div-">{"".join(chips)}</nav>')
 
 
-def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
+def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0,
+                  table_id: str = "banzuke") -> str:
     """rank_value 기준으로 東/西 를 한 줄에 묶어 그린다."""
     up = "../" * depth
     slots: dict[tuple[str, str, int], dict[str, Any]] = {}
@@ -394,7 +408,7 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
             f"{ja}{heya}{record_html(d['w'], d['l'], d['a'])}</div>"
         )
 
-    out: list[str] = ['<div class="banzuke">',
+    out: list[str] = [f'<div class="banzuke" id="{e(table_id)}">',
                       '<div class="bz-head"><div>東</div><div class="c">지위</div>'
                       '<div style="text-align:right">西</div></div>']
     seen_div: set[str] = set()
@@ -403,7 +417,9 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
         div = s["division"]
         if div not in seen_div:
             seen_div.add(div)
-            out.append(f'<div class="div-break" id="{DIV_ANCHOR.get(div, div.lower())}">'
+            # data-division 은 단 고르기 단추가 보는 표시다 (assets/filter.js)
+            out.append(f'<div class="div-break" id="{DIV_ANCHOR.get(div, div.lower())}"'
+                       f' data-division="{e(div)}">'
                        f'{e(DIV_KO.get(div, div))}'
                        f' · {e(DIV_JA.get(div, ""))}</div>')
         ko, numtxt = rank_display(s["kind"], s["num"], div)
@@ -411,7 +427,7 @@ def banzuke_table(rows: Sequence[Sequence[Any]], depth: int = 0) -> str:
         rk_cls = "rk-" + (s["kind"].lower() if s["kind"] != "Numbered"
                           else div.lower())
         out.append(
-            f'<div class="bz-row">{side_cell(s.get("E"), "E")}'
+            f'<div class="bz-row" data-division="{e(div)}">{side_cell(s.get("E"), "E")}'
             f'<div class="bz-rank {rk_cls}">'
             f'<span class="k">{e(ko)}</span>'
             f'<span class="n">{e(ja)}{(" " + numtxt) if numtxt else ""}</span>'
@@ -531,8 +547,9 @@ def build_index(rn: Runner, out: Path, basho: Sequence, gen: str) -> None:
   <p class="sub">{e(when)} · 총 {i(n_entries)}명</p>
 </div>
 <main>
-{division_jump(rows, extra=([("torikumi", "오늘의 대전")] if tk else []))}
 {tk}
+<h2>반즈케</h2>
+{division_jump(rows)}
 {banzuke_table(rows)}
 <h2>수록 현황</h2>
 <div class="grid">
@@ -544,6 +561,7 @@ def build_index(rn: Runner, out: Path, basho: Sequence, gen: str) -> None:
     <span class="d">{e(basho_label(st[4]))} ~ {e(basho_label(st[5]))}</span></div>
 </div>
 </main>
+<script src="assets/filter.js"></script>
 """
     (out / "index.html").write_text(
         page(title=f"{name} 반즈케", body=body, current="", generated=gen,
@@ -593,6 +611,7 @@ def build_banzuke_pages(rn: Runner, out: Path, basho: Sequence, gen: str) -> Non
 {division_jump(rows)}
 {banzuke_table(rows, depth=1)}
 </main>
+<script src="../assets/filter.js"></script>
 """
         (d / f"{bid}.html").write_text(
             page(title=f"{basho_label(bid)} {name}", body=pbody, depth=1,
@@ -983,7 +1002,9 @@ def build_heya(rn: Runner, out: Path, gen: str) -> int:
   <p class="sub">{len(rows)}개 헤야. 일문(一門)으로 걸러 볼 수 있습니다.</p>
 </div>
 <main>
-<nav class="jumpbar" id="ichimon-filter" aria-label="일문 고르기">{"".join(chips)}</nav>
+<nav class="jumpbar" id="ichimon-filter" aria-label="일문 고르기"
+     data-filter-for="#heya-cards" data-filter-attr="data-ichimon"
+     data-hash-prefix="mon-" data-empty="#heya-empty">{"".join(chips)}</nav>
 <p class="tk-note" id="filter-note">일문은 헤야들의 계보 그룹입니다. 같은 일문끼리는
   원칙적으로 본대회에서 맞붙지 않습니다.
   자세한 설명은 <a href="../guide.html#ichimon">스모 기초 지식</a>에 있습니다.</p>

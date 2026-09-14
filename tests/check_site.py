@@ -78,6 +78,40 @@ class Checker(HTMLParser):
             self.stack.pop()
 
 
+FILTER_BAR = re.compile(
+    r'<nav class="jumpbar"[^>]*data-filter-for="#([^"]+)"[^>]*'
+    r'data-filter-attr="([^"]+)"[^>]*>(.*?)</nav>', re.S)
+FILTER_BTN = re.compile(r'data-filter="([^"]+)"')
+
+
+def check_filters(path: Path, root: Path) -> list[str]:
+    """고르기 단추가 실제로 무언가를 고르는지 본다.
+
+    단추가 고르는 값이 화면에 하나도 없으면, 눌렀을 때 빈 화면이 나온다.
+    누르기 전에는 멀쩡해 보이므로 사람 눈으로는 잘 안 걸린다.
+    """
+    problems: list[str] = []
+    text = path.read_text(encoding="utf-8")
+    rel = path.relative_to(root)
+
+    for target, attr, inner in FILTER_BAR.findall(text):
+        if f'id="{target}"' not in text:
+            problems.append(f"{rel}: 고르기 단추가 가리키는 '#{target}' 이 없음")
+            continue
+        values = set(re.findall(attr + r'="([^"]+)"', text))
+        for want in FILTER_BTN.findall(inner):
+            if want == "all":
+                continue
+            if want not in values:
+                problems.append(
+                    f"{rel}: '{want}' 단추를 눌러도 보여 줄 것이 없음 "
+                    f"({attr} 값: {sorted(values)[:5]})")
+        # 걸러 낼 것을 실어 나르는 스크립트가 있어야 동작한다
+        if "assets/filter.js" not in text:
+            problems.append(f"{rel}: 고르기 단추는 있는데 filter.js 를 부르지 않음")
+    return problems
+
+
 def check_file(path: Path, root: Path) -> list[str]:
     problems: list[str] = []
     text = path.read_text(encoding="utf-8")
@@ -179,9 +213,26 @@ def main(argv: list[str] | None = None) -> int:
     for need in ("index.html", "yosou.html", "assets/style.css",
                  "assets/search.js", "rikishi/index.html",
                  "rikishi/search-index.json", "heya/index.html",
-                 "banzuke/index.html", "guide.html", "robots.txt", ".nojekyll"):
+                 "banzuke/index.html", "guide.html", "robots.txt",
+                 "assets/filter.js", ".nojekyll"):
         if not (root / need).exists():
             problems.append(f"필수 파일 없음: {need}")
+
+    # 고르기 단추가 실제로 무언가를 고르는가
+    for p in files:
+        problems += check_filters(p, root)
+
+    # hidden 이 화면에서도 정말 사라지는가.
+    #   hidden 의 기본값은 display:none 이지만, 그 요소에 display 를 따로 지정해
+    #   두면(반즈케 행의 grid) 기본값이 밀려 **숨겨지지 않는다.** 실제로 그래서
+    #   단추를 눌러도 표가 그대로였다. CSS 한 줄이 빠지면 조용히 되돌아온다.
+    css_path = root / "assets" / "style.css"
+    if css_path.exists():
+        css = css_path.read_text(encoding="utf-8")
+        if not re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", css):
+            problems.append(
+                "style.css 에 [hidden]{display:none!important} 가 없습니다 "
+                "— 단추로 걸러도 화면이 그대로일 수 있습니다")
 
     # 검색 인덱스가 실제로 쓸 수 있는 모양인가
     idx_path = root / "rikishi" / "search-index.json"
