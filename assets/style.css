@@ -184,6 +184,9 @@ a { color: var(--indigo); text-underline-offset: 2px; }
 /* 마에가시라는 색을 따로 주지 않는다 — 수가 가장 많아 색을 넣으면 표가
    시끄러워진다. 기본 글자색을 쓴다는 뜻으로 적어 둔다. */
 .rk-maegashira .k { color: var(--ink); }
+/* 선수 페이지가 없는 사람 (마쿠시타가 쥬료 취조에 올라온 경우 등).
+   링크가 아니므로 밑줄도 색도 없이, 옆 이름들과 같은 글씨로 보인다. */
+.rk-nopage { color: inherit; }
 .rk-ozeki .k    { color: var(--clay); }
 .rk-sekiwake .k { color: var(--indigo); }
 .rk-komusubi .k { color: var(--moss); }
