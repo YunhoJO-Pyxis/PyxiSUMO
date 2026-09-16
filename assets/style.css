@@ -207,6 +207,20 @@ a { color: var(--indigo); text-underline-offset: 2px; }
 .rk-maegashira .k { color: var(--ink); }
 
 .rk-nopage { color: inherit; }
+
+.hb-row > td { padding: 0 0 10px; }
+.hb-row summary {
+  cursor: pointer; font-size: .82rem; color: var(--ink-2);
+  padding: 4px 0; list-style-position: inside;
+}
+.hb { list-style: none; margin: 6px 0 0; padding: 0; }
+.hb li {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 3px 0; font-size: .86rem; border-top: 1px solid var(--rule);
+}
+.hb-day { color: var(--ink-3); font-size: .78rem; min-width: 4.2em; }
+.hb-kim { color: var(--ink-3); font-size: .78rem; }
+.hb-more { margin: 8px 0 0; font-size: .8rem; }
 .rk-ozeki .k    { color: var(--clay); }
 .rk-sekiwake .k { color: var(--indigo); }
 .rk-komusubi .k { color: var(--moss); }
