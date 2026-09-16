@@ -5,8 +5,6 @@
   if (!box || !out) return;
   var rows = [];
 
-  // 자료는 페이지 안에 들어 있다. fetch 를 쓰면 파일을 직접 열었을 때
-  // 브라우저가 막아 검색이 통째로 죽는다.
   var inline = document.getElementById('search-data');
   if (inline) {
     try { rows = JSON.parse(inline.textContent || '[]'); } catch (err) { rows = []; }
@@ -18,7 +16,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) { rows = d; render(''); })
       .catch(function () {
-        out.textContent = '검색 자료를 불러오지 못했습니다.';
+        out.textContent = "검색 자료를 불러오지 못했습니다.";
         out.className = 'search-empty';
       });
   }
@@ -39,12 +37,11 @@
     if (!hits.length) {
       var p = document.createElement('p');
       p.className = 'search-empty';
-      p.textContent = '찾는 선수가 없습니다.';
+      p.textContent = "찾는 선수가 없습니다.";
       out.appendChild(p);
       return;
     }
 
-    // 이름은 외부 데이터다. innerHTML 로 넣지 않고 textContent 로 만든다.
     function div(cls, text) {
       var d = document.createElement('div');
       d.className = cls;
@@ -60,10 +57,9 @@
       a.href = r.u || (encodeURIComponent(r.i) + '.html');
       var title = div('t', r.n || '');
       if (r.x) {
-        // 은퇴 선수를 현역과 같은 모양으로 보여주면 지금 뛰는 줄 알게 된다.
         var tag = document.createElement('span');
         tag.className = 'tag-retired';
-        tag.textContent = '은퇴';
+        tag.textContent = "은퇴";
         title.appendChild(tag);
       }
       a.appendChild(title);
@@ -76,8 +72,7 @@
     if (hits.length > 120) {
       var more = document.createElement('p');
       more.className = 'search-empty';
-      more.textContent = hits.length +
-        '명 중 120명만 표시했습니다. 더 구체적으로 입력해 보세요.';
+      more.textContent = "{n}명 중 120명만 표시했습니다. 더 구체적으로 입력해 보세요.".replace('{n}', hits.length);
       out.appendChild(more);
     }
   }
