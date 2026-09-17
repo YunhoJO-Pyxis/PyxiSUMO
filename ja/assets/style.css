@@ -119,6 +119,19 @@ img { max-width: 100%; }
 }
 
 
+.name-note {
+  margin: 56px 0 0; padding: 4px 0 4px 18px;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-2); font-size: .92rem;
+}
+.name-note h2 {
+  font-family: var(--f-display); font-weight: 700; font-size: .95rem;
+  margin: 0 0 10px; padding: 0; border: 0; color: var(--ink);
+}
+.name-note p { margin: 0 0 10px; max-width: 62ch; }
+.name-note p:last-child { margin-bottom: 0; }
+
+
 .theme-switch { display: none; }
 :root.has-js .theme-switch {
   display: inline-flex; align-items: center; justify-content: center;
