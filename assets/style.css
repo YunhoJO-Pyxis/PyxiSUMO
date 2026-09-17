@@ -95,8 +95,12 @@ img { max-width: 100%; }
 }
 
 
+
+.head-tools {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+}
 .lang-switch {
-  display: flex; align-items: center; gap: 1px; margin-left: 18px;
+  display: flex; align-items: center; gap: 1px;
   border: 1px solid var(--rule); border-radius: 3px; overflow: hidden;
   background: var(--rule);
 }
@@ -113,9 +117,25 @@ img { max-width: 100%; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .lang-switch a.is-on { color: #11151A; }
 }
+
+
+.theme-switch { display: none; }
+:root.has-js .theme-switch {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 5.8em;
+  padding: 4px 9px; font-family: inherit; font-size: .78rem;
+  font-weight: 500; line-height: 1.5;
+  color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 3px;
+  cursor: pointer; white-space: nowrap;
+}
+:root.has-js .theme-switch:hover {
+  color: var(--ink); background: var(--surface-2);
+}
+
 @media (max-width: 640px) {
   .site-head .wrap { gap: 10px 14px; }
-  .lang-switch { margin-left: 0; order: 1; }
+  .head-tools { margin-left: 0; order: 1; }
   .site-nav { order: 2; width: 100%; margin-left: 0; }
 }
 a:focus-visible, button:focus-visible, input:focus-visible {
