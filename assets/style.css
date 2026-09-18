@@ -259,6 +259,8 @@ a { color: var(--indigo); text-underline-offset: 2px; }
 .rk-komusubi .k { color: var(--moss); }
 .rk-juryo .k    { color: var(--purple); }
 
+.rk-makushita .k { color: var(--ink-3); }
+
 .div-break {
   background: var(--ink); color: var(--ground);
   font-family: var(--f-display); font-weight: 700; font-size: .82rem;
@@ -493,6 +495,9 @@ button.jump.is-on span { color: var(--ground); opacity: .7; }
   font-variant-numeric: tabular-nums;
 }
 .bt-rec b { color: var(--ink-2); font-weight: 600; }
+
+
+.bt-rank { color: var(--ink-3); font-size: .72rem; margin-left: -2px; }
 
 
 .km-h {
