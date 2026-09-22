@@ -21,7 +21,7 @@
   }
   people.forEach(function (p) {
     byId[p.i] = p;
-    p._q = fold([p.n, p.s, p.j, p.e, p.k].join('\u0001'));
+    p._q = fold([p.n, p.s, p.j, p.e, p.k, p.h].join('\u0001'));
   });
 
   function matches(q) {
@@ -77,11 +77,12 @@
         li.setAttribute('role', 'option');
         li.setAttribute('tabindex', '-1');
         li.setAttribute('aria-selected', p.i === me.id ? 'true' : 'false');
+        
         var who = el('span', 'h2h-who');
         who.appendChild(el('span', 'h2h-name', p.n));
         if (p.s) { who.appendChild(el('span', 'h2h-sub', p.s)); }
         li.appendChild(who);
-        li.appendChild(el('span', 'h2h-rank', p.r));
+        li.appendChild(el('span', 'h2h-rank', p.r + (p.h ? ' \u00b7 ' + p.h : '')));
         li.addEventListener('click', function () { choose(p); input.focus(); });
         list.appendChild(li);
       });
@@ -139,7 +140,8 @@
           choose(hits[active]);
         }
       } else if (ev.key === 'Escape') {
-        close();
+        
+        if (isOpen()) { ev.preventDefault(); close(); }
       }
     });
     
@@ -157,7 +159,7 @@
 
   function say(text) {
     out.textContent = '';
-    out.appendChild(el('p', 'h2h-msg', text));
+    out.appendChild(el('p', 'search-empty', text));
   }
 
   var seq = 0;
@@ -191,14 +193,15 @@
     });
 
     var head = el('div', 'h2h-head');
+    
     function side(p, n, cls) {
-      var s = el('div', 'h2h-side ' + cls);
-      var a = el('a', 'h2h-big', p.n);
+      var a = el('a', 'card h2h-card ' + cls);
       a.href = D.rk + encodeURIComponent(p.i) + '.html';
-      s.appendChild(a);
-      s.appendChild(el('div', 'h2h-meta', p.r));
-      s.appendChild(el('div', 'h2h-wins', String(n)));
-      return s;
+      a.appendChild(el('div', 't', p.n));
+      if (p.s) { a.appendChild(el('div', 'ja', p.s)); }
+      a.appendChild(el('div', 'm', p.r + (p.h ? ' \u00b7 ' + p.h : '')));
+      a.appendChild(el('div', 'h2h-wins', String(n)));
+      return a;
     }
     head.appendChild(side(pa, won, 'l' + (won > lost ? ' lead' : '')));
     head.appendChild(el('div', 'h2h-dash', '\u2013'));
@@ -219,7 +222,7 @@
     if (notes.length) { out.appendChild(el('p', 'h2h-sum', notes.join(' \u00b7 '))); }
 
     if (!done.length && !next) {
-      out.appendChild(el('p', 'h2h-msg', "아직 맞붙은 기록이 없습니다."));
+      out.appendChild(el('p', 'search-empty', "아직 맞붙은 기록이 없습니다."));
       return;
     }
 
