@@ -375,6 +375,100 @@ td.name a:hover { text-decoration: underline; }
 .search-empty { color: var(--ink-3); padding: 20px 0; }
 
 
+.h2h-form {
+  display: flex; align-items: flex-end; gap: 12px 14px; flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.h2h-pick { position: relative; flex: 1 1 240px; min-width: 0; }
+.h2h-pick label {
+  display: block; font-family: var(--f-mono); font-size: .66rem;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+  margin: 0 0 5px;
+}
+
+.h2h-pick::after {
+  content: "\25BE"; position: absolute; right: 13px; bottom: 11px;
+  color: var(--ink-3); font-size: .8rem; pointer-events: none;
+}
+.h2h-input {
+  width: 100%; font-family: var(--f-body); font-size: 1rem;
+  padding: 11px 34px 11px 14px; border: 1px solid var(--rule-strong);
+  background: var(--surface); color: var(--ink); border-radius: 2px;
+}
+.h2h-vs {
+  font-family: var(--f-display); font-weight: 900; font-size: 1.1rem;
+  color: var(--vermilion); padding: 0 2px 10px;
+}
+.h2h-go {
+  font-family: inherit; font-size: .95rem; font-weight: 600; cursor: pointer;
+  padding: 11px 22px; border: 1px solid var(--indigo); border-radius: 2px;
+  background: var(--indigo); color: var(--surface);
+}
+.h2h-go:hover { filter: brightness(1.1); }
+:root[data-theme="dark"] .h2h-go { color: #11151A; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .h2h-go { color: #11151A; }
+}
+
+.h2h-list {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 20;
+  margin: 2px 0 0; padding: 4px 0; list-style: none;
+  max-height: 20rem; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  border-radius: 2px; box-shadow: var(--shadow);
+}
+.h2h-opt {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding: 7px 12px; cursor: pointer; outline: none;
+}
+.h2h-opt:hover, .h2h-opt:focus, .h2h-opt.is-active { background: var(--surface-2); }
+.h2h-opt.is-picked .h2h-name { color: var(--indigo); }
+.h2h-who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.h2h-name { font-weight: 600; white-space: nowrap; }
+.h2h-sub { font-size: .78rem; color: var(--ink-3); white-space: nowrap;
+           overflow: hidden; text-overflow: ellipsis; }
+.h2h-rank { font-size: .76rem; color: var(--ink-2); white-space: nowrap; }
+.h2h-none { padding: 10px 12px; color: var(--ink-3); font-size: .88rem; }
+.h2h-range { font-size: .8rem; color: var(--ink-3); margin: 0 0 26px; }
+.h2h-out { min-height: 2rem; }
+.h2h-msg { color: var(--ink-2); padding: 12px 0; }
+
+
+.h2h-head {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: end;
+  gap: 16px; padding: 20px 22px; margin: 0 0 10px;
+  background: var(--surface); border: 1px solid var(--rule);
+}
+.h2h-side.r { text-align: right; }
+.h2h-big {
+  font-family: var(--f-display); font-weight: 900; font-size: 1.35rem;
+  color: var(--ink); text-decoration: none;
+}
+.h2h-big:hover { text-decoration: underline; }
+.h2h-meta { font-size: .8rem; color: var(--ink-3); margin-top: 2px; }
+.h2h-wins {
+  font-family: var(--f-mono); font-size: 2.4rem; font-weight: 500;
+  line-height: 1.1; color: var(--ink-3); margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.h2h-side.lead .h2h-wins { color: var(--vermilion); font-weight: 600; }
+.h2h-dash { font-size: 1.6rem; color: var(--ink-3); padding-bottom: 6px; }
+.h2h-sum { font-size: .85rem; color: var(--ink-2); margin: 0 0 18px; }
+.h2h-table td { vertical-align: middle; }
+.h2h-basho { white-space: nowrap; }
+.h2h-cell { white-space: nowrap; }
+.h2h-cell .h2h-r { margin-right: 6px; color: var(--ink-2); }
+.h2h-kim { white-space: nowrap; }
+.h2h-table tr.is-pending td { background: var(--indigo-soft); }
+@media (max-width: 640px) {
+  .h2h-vs { padding: 0; width: 100%; text-align: center; }
+  .h2h-go { width: 100%; }
+  .h2h-head { padding: 16px; gap: 10px; }
+  .h2h-big { font-size: 1.1rem; }
+  .h2h-wins { font-size: 1.9rem; }
+}
+
+
 .conf { display: flex; align-items: center; gap: 7px; }
 .conf-bar {
   width: 42px; height: 5px; background: var(--surface-2);
