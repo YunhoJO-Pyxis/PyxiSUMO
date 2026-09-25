@@ -21,6 +21,7 @@
   }
   people.forEach(function (p) {
     byId[p.i] = p;
+    p.d = p.d || p.n;   
     p._q = fold([p.n, p.s, p.j, p.e, p.k, p.h].join('\u0001'));
   });
 
@@ -57,7 +58,7 @@
       input.removeAttribute('aria-activedescendant');
       active = -1;
     }
-    function label(id) { return byId[id] ? byId[id].n : ''; }
+    function label(id) { return byId[id] ? byId[id].d : ''; }
 
     function render() {
       
@@ -79,7 +80,7 @@
         li.setAttribute('aria-selected', p.i === me.id ? 'true' : 'false');
         
         var who = el('span', 'h2h-who');
-        who.appendChild(el('span', 'h2h-name', p.n));
+        who.appendChild(el('span', 'h2h-name', p.d));
         if (p.s) { who.appendChild(el('span', 'h2h-sub', p.s)); }
         li.appendChild(who);
         li.appendChild(el('span', 'h2h-rank', p.r + (p.h ? ' \u00b7 ' + p.h : '')));
@@ -101,7 +102,7 @@
 
     function choose(p) {
       me.id = p.i;
-      input.value = p.n;
+      input.value = p.d;
       close();
     }
     me.set = choose;
@@ -113,7 +114,7 @@
       if (!v) { return null; }
       var found = matches(v);
       var exact = found.filter(function (p) {
-        return fold(p.n) === fold(v) || fold(p.j) === fold(v) ||
+        return fold(p.n) === fold(v) || fold(p.d) === fold(v) || fold(p.j) === fold(v) ||
                fold(p.e) === fold(v);
       });
       var pick = found.length === 1 ? found[0] : (exact.length === 1 ? exact[0] : null);
@@ -197,7 +198,7 @@
     function side(p, n, cls) {
       var a = el('a', 'card h2h-card ' + cls);
       a.href = D.rk + encodeURIComponent(p.i) + '.html';
-      a.appendChild(el('div', 't', p.n));
+      a.appendChild(el('div', 't', p.d));
       if (p.s) { a.appendChild(el('div', 'ja', p.s)); }
       a.appendChild(el('div', 'm', p.r + (p.h ? ' \u00b7 ' + p.h : '')));
       a.appendChild(el('div', 'h2h-wins', String(n)));
@@ -230,7 +231,7 @@
     var table = el('table', 'h2h-table');
     var thead = el('thead');
     var tr = el('tr');
-    ["Basho", "Day", pa.n, pb.n, "Kimarite"].forEach(function (h) {
+    ["Basho", "Day", pa.d, pb.d, "Kimarite"].forEach(function (h) {
       tr.appendChild(el('th', '', h));
     });
     thead.appendChild(tr);
