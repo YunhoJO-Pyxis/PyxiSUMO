@@ -84,9 +84,10 @@ img { max-width: 100%; }
   font-family: var(--f-mono); font-size: .66rem; letter-spacing: .16em;
   text-transform: uppercase; color: var(--ink-3);
 }
-.site-nav { display: flex; gap: 4px 18px; flex-wrap: wrap; margin-left: auto; }
+
+.site-nav { display: flex; gap: 4px 14px; flex-wrap: wrap; margin-left: auto; }
 .site-nav a {
-  color: var(--ink-2); text-decoration: none; font-size: .92rem; font-weight: 500;
+  color: var(--ink-2); text-decoration: none; font-size: .9rem; font-weight: 500;
   padding: 3px 0; border-bottom: 2px solid transparent;
 }
 .site-nav a:hover { color: var(--ink); }
@@ -521,6 +522,23 @@ a.tb-day:hover { border-color: var(--indigo); color: var(--indigo); }
 .conf-bar i { display: block; height: 100%; background: var(--indigo); }
 .conf span { font-family: var(--f-mono); font-size: .74rem; color: var(--ink-2); }
 
+
+.yz-one + .yz-one { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.yz-line {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  font-size: .78rem; color: var(--ink-2); margin-top: 3px;
+}
+.bz-side.w .yz-line { justify-content: flex-end; }
+.yz-line .bz-rec { margin-top: 0; }
+.yz-why .conf { gap: 5px; align-self: center; }
+.yz-why .conf-bar { width: 34px; }
+.yz-basis { font-size: .74rem; color: var(--ink-3); word-break: keep-all; }
+.yz-none { color: var(--ink-3); }
+.yz-act { font-weight: 500; }
+@media (max-width: 640px) {
+  .bz-side.w .yz-line { justify-content: flex-start; }
+}
+
 .move-up   { color: var(--moss); }
 .move-down { color: var(--vermilion); }
 .hit { color: var(--indigo); font-weight: 600; }
@@ -611,6 +629,8 @@ button.jump.is-on span { color: var(--ground); opacity: .7; }
   font-size: .84rem; color: var(--ink-2); margin: 0 0 14px; max-width: 70ch;
 }
 .bz-note strong { color: var(--ink); }
+
+.note p, .bz-note { word-break: keep-all; }
 .bz-bout {
   font-size: .78rem; color: var(--ink-2); margin-top: 3px;
   display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap;
