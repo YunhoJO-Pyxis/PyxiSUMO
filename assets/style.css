@@ -263,6 +263,7 @@ a { color: var(--indigo); text-underline-offset: 2px; }
 .rk-juryo .k    { color: var(--purple); }
 
 .rk-makushita .k { color: var(--ink-3); }
+.rk-sandanme .k, .rk-jonidan .k, .rk-jonokuchi .k { color: var(--ink-3); }
 
 .div-break {
   background: var(--ink); color: var(--ground);
@@ -539,6 +540,27 @@ a.tb-day:hover { border-color: var(--indigo); color: var(--indigo); }
   .bz-side.w .yz-line { justify-content: flex-start; }
 }
 
+
+.yz-tabs { margin-bottom: 14px; position: static; }  
+.yz-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 4px 0 14px; font-size: .9rem; }
+.yz-pick select {
+  font: inherit; color: var(--ink); background: var(--ground);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px;
+  min-width: 14em; max-width: 100%;
+}
+.yz-heya h3 { margin: 6px 0 8px; font-size: 1.05rem; }
+.yz-heya h3 span { color: var(--ink-3); font-weight: 400; font-size: .85rem; margin-left: 6px; }
+.yz-heya td.rk { white-space: nowrap; font-weight: 600; }
+.yz-heya td .sub { display: block; color: var(--ink-3); font-size: .78rem; }
+.yz-heya .conf { display: inline-flex; gap: 5px; align-items: center; }
+.yz-heya .conf-bar { width: 34px; }
+@media (max-width: 640px) {
+  .yz-heya table { font-size: .82rem; }
+  .yz-heya th, .yz-heya td { padding: 7px 8px; }
+  .yz-heya .bz-rec { display: block; }
+}
+
 .move-up   { color: var(--moss); }
 .move-down { color: var(--vermilion); }
 .hit { color: var(--indigo); font-weight: 600; }
@@ -631,6 +653,8 @@ button.jump.is-on span { color: var(--ground); opacity: .7; }
 .bz-note strong { color: var(--ink); }
 
 .note p, .bz-note { word-break: keep-all; }
+
+html:lang(ja) * { word-break: normal !important; line-break: strict; }
 .bz-bout {
   font-size: .78rem; color: var(--ink-2); margin-top: 3px;
   display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap;
