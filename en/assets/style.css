@@ -554,7 +554,21 @@ a.tb-day:hover { border-color: var(--indigo); color: var(--indigo); }
 .yz-promo { color: var(--purple); }
 .yz-promo .bt-day { color: var(--purple); border-color: currentColor; }
 .yz-promo-sum { padding: 14px 16px 4px; border-bottom: 1px solid var(--rule); background: var(--surface); }
-.yz-promo-sum h3 { margin: 0 0 6px; font-size: 1rem; }
+.yz-promo-sum { display: block; }
+.yz-promo-sum > summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 2px 0 10px; font-weight: 700;
+}
+.yz-promo-sum > summary::-webkit-details-marker { display: none; }
+.yz-promo-sum > summary .more {
+  font-size: .78rem; font-weight: 600; color: var(--indigo); white-space: nowrap;
+  border: 1px solid var(--rule-strong); padding: 4px 10px;
+}
+.yz-promo-sum > summary .more::after { content: " ▾"; }
+.yz-promo-sum[open] > summary .more::after { content: " ▴"; }
+.yz-promo-sum > summary .c, .yz-promo-sum[open] > summary .o { display: none; }
+.yz-promo-sum[open] > summary .c { display: inline; }
+.yz-promo-sum > summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
 .yz-promo-sum .table-scroll { margin-bottom: 12px; }
 .yz-promo-sum td { font-size: .86rem; }
 .yz-promo-sum td.cond { color: var(--purple); }
