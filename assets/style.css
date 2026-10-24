@@ -550,6 +550,19 @@ a.tb-day:hover { border-color: var(--indigo); color: var(--indigo); }
   min-width: 14em; max-width: 100%;
 }
 .yz-heya h3 { margin: 6px 0 8px; font-size: 1.05rem; }
+
+.yz-promo { color: var(--purple); }
+.yz-promo .bt-day { color: var(--purple); border-color: currentColor; }
+.yz-promo-sum { padding: 14px 16px 4px; border-bottom: 1px solid var(--rule); background: var(--surface); }
+.yz-promo-sum h3 { margin: 0 0 6px; font-size: 1rem; }
+.yz-promo-sum .table-scroll { margin-bottom: 12px; }
+.yz-promo-sum td { font-size: .86rem; }
+.yz-promo-sum td.cond { color: var(--purple); }
+@media (max-width: 640px) {
+  .yz-promo-sum { padding: 12px 10px 2px; }
+  .yz-promo-sum th, .yz-promo-sum td { padding: 7px 8px; }
+  .yz-promo-sum td.cond { min-width: 9em; }
+}
 .yz-heya h3 span { color: var(--ink-3); font-weight: 400; font-size: .85rem; margin-left: 6px; }
 .yz-heya td.rk { white-space: nowrap; font-weight: 600; }
 .yz-heya td .sub { display: block; color: var(--ink-3); font-size: .78rem; }
