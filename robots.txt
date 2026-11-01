@@ -1,0 +1,9 @@
+# PyxiSUMO
+# 사람이 보는 페이지는 모두 공개입니다. 검색 로봇도 환영합니다.
+# 다만 자료 파일을 통째로 긁어가는 것은 서버(=GitHub) 에만 부담이 되므로 막습니다.
+User-agent: *
+Allow: /
+Disallow: /rikishi/search-index.json
+
+# 예의 없이 몰아치는 수집기에는 간격을 요청합니다 (강제력은 없습니다).
+Crawl-delay: 5
