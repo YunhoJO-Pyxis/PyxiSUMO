@@ -50,3 +50,29 @@
     }
   });
 })();
+
+(function () {
+  var pop = null, on = null;
+  function close() {
+    if (pop) { pop.remove(); pop = null; }
+    if (on) { on.classList.remove('is-on'); on = null; }
+  }
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest('.bz-hoshi i[title]') : null;
+    if (!el || el === on) { close(); return; }
+    close();
+    on = el; el.classList.add('is-on');
+    pop = document.createElement('div');
+    pop.className = 'hoshi-pop';
+    pop.setAttribute('role', 'status');
+    pop.textContent = el.getAttribute('title');
+    document.body.appendChild(pop);
+    var r = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    var x = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 12));
+    var y = r.top - h - 6;
+    if (y < 8) y = r.bottom + 6;
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  });
+  window.addEventListener('scroll', close, { passive: true });
+  window.addEventListener('resize', close);
+})();
